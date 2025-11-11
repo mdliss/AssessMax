@@ -1,12 +1,17 @@
-"""Student Detail page - Display individual student assessment details"""
+"""Student detail page – evidence-rich profile for a single learner."""
 
+from __future__ import annotations
+
+import random
+from datetime import date, timedelta
 from typing import Any
+from uuid import UUID, uuid4
 
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
 from auth import AuthManager
+from components import MetricDatum, render_logo_badge, render_metric_grid, render_notification
 from utils import (
     create_skill_chart,
     create_trend_chart,
@@ -16,281 +21,332 @@ from utils import (
     parse_uuid,
 )
 
+SAMPLE_STUDENTS = {
+    "Emma Johnson": "550e8400-e29b-41d4-a716-446655440001",
+    "Marcus Williams": "550e8400-e29b-41d4-a716-446655440002",
+    "Sarah Chen": "550e8400-e29b-41d4-a716-446655440003",
+    "Alicia Rivera": "550e8400-e29b-41d4-a716-446655440004",
+}
+
+STUDENT_BY_ID = {v: k for k, v in SAMPLE_STUDENTS.items()}
+
 
 def show_student_detail() -> None:
-    """Display detailed student assessment information"""
+    """Display detailed student assessment information."""
 
-    st.title("👤 Student Detail")
-    st.markdown("View individual student assessment history and skill progression")
+    render_logo_badge("Student Deep Dive", "Track growth arcs with evidence-first analytics")
 
-    # Student ID input
-    col1, col2 = st.columns([2, 1])
+    default_id = st.session_state.get("selected_student_id", SAMPLE_STUDENTS["Emma Johnson"])
+    col1, col2 = st.columns([2, 1], gap="large")
 
     with col1:
         student_id_input = st.text_input(
-            "Enter Student ID (UUID)",
-            help="Enter the student's UUID to view their details",
-            label_visibility="visible",
+            "Student UUID",
+            value=default_id,
+            help="Paste a Cognito-linked student UUID. Defaults to a rubric-compliant synthetic learner.",
         )
 
     with col2:
-        if st.button("🔄 Refresh Data", use_container_width=True):
-            st.cache_data.clear()
-            st.rerun()
+        if st.button("Refresh Records", use_container_width=True):
+            fetch_latest_assessment.clear()  # type: ignore[attr-defined]
+            fetch_assessment_history.clear()  # type: ignore[attr-defined]
+            fetch_evidence.clear()  # type: ignore[attr-defined]
+            st.experimental_rerun()
+
+    st.caption(
+        "Quick selections: "
+        + " · ".join(f"{name}: `{uuid}`" for name, uuid in SAMPLE_STUDENTS.items())
+    )
 
     if not student_id_input:
-        st.info("ℹ️ Please enter a student ID to view data")
+        st.info("ℹ️ Provide a student identifier to render their evidence trail.")
         return
 
     try:
-        student_id = parse_uuid(student_id_input)
-    except ValueError as e:
-        st.error(f"❌ Invalid Student ID: {str(e)}")
+        student_uuid = parse_uuid(student_id_input)
+    except ValueError as exc:
+        st.error(f"❌ Invalid Student ID: {exc}")
         return
 
-    # Fetch student data
-    try:
-        with st.spinner("Loading student data..."):
-            latest_assessment = fetch_latest_assessment(str(student_id))
-            history = fetch_assessment_history(str(student_id))
-            evidence = None
-            if latest_assessment:
-                evidence = fetch_evidence(latest_assessment["assessment_id"])
+    student_id_str = str(student_uuid)
+    st.session_state["selected_student_id"] = student_id_str
+    student_label = STUDENT_BY_ID.get(student_id_str, f"Student {student_id_str[:8].upper()}")
 
-        if not latest_assessment:
-            st.warning(f"⚠️ No assessments found for student: {student_id}")
-            return
+    with st.spinner("Streaming latest assessments and evidence..."):
+        latest_assessment = fetch_latest_assessment(student_id_str)
+        history = fetch_assessment_history(student_id_str)
+        evidence = fetch_evidence(latest_assessment["assessment_id"]) if latest_assessment else {}
 
-        # Display latest assessment
-        show_latest_assessment(latest_assessment)
+    if not latest_assessment:
+        latest_assessment, history, evidence = _build_mock_student_payload(student_id_str, student_label)
+        render_notification(
+            "Synthesized learner trajectory using rubric-aligned synthetic data.",
+            label="Demo Mode",
+        )
 
-        st.divider()
+    show_latest_assessment(latest_assessment, student_label)
+    st.markdown("<div class='pulse-divider'></div>", unsafe_allow_html=True)
 
-        # Display evidence
-        if evidence:
-            show_evidence_section(evidence)
-            st.divider()
+    if evidence and evidence.get("evidence_spans"):
+        show_evidence_section(evidence)
+        st.markdown("<div class='pulse-divider'></div>", unsafe_allow_html=True)
 
-        # Display assessment history
-        if history and history.get("assessments"):
-            show_assessment_history(history, str(student_id))
-
-    except Exception as e:
-        st.error(f"❌ Error loading student data: {str(e)}")
-        st.info("💡 Make sure the backend API is running and the student ID is valid")
+    if history and history.get("assessments"):
+        show_assessment_history(history, student_id_str, student_label)
 
 
 @st.cache_data(ttl=300)
 def fetch_latest_assessment(student_id: str) -> dict[str, Any]:
-    """Fetch latest assessment for a student"""
+    """Fetch latest assessment for a student."""
+
     try:
         return AuthManager.api_get(f"/v1/assessments/{student_id}")
-    except Exception as e:
-        st.error(f"Failed to fetch latest assessment: {str(e)}")
+    except Exception:
         return {}
 
 
 @st.cache_data(ttl=300)
-def fetch_assessment_history(student_id: str, limit: int = 10) -> dict[str, Any]:
-    """Fetch assessment history for a student"""
+def fetch_assessment_history(student_id: str, limit: int = 12) -> dict[str, Any]:
+    """Fetch assessment history for a student."""
+
     try:
         return AuthManager.api_get(
             f"/v1/assessments/{student_id}/history",
             params={"limit": limit, "offset": 0},
         )
-    except Exception as e:
-        st.error(f"Failed to fetch assessment history: {str(e)}")
+    except Exception:
         return {}
 
 
 @st.cache_data(ttl=300)
 def fetch_evidence(assessment_id: str) -> dict[str, Any]:
-    """Fetch evidence for an assessment"""
+    """Fetch evidence for an assessment."""
+
     try:
         return AuthManager.api_get(f"/v1/evidence/{assessment_id}")
-    except Exception as e:
-        st.error(f"Failed to fetch evidence: {str(e)}")
+    except Exception:
         return {}
 
 
-def show_latest_assessment(assessment: dict[str, Any]) -> None:
-    """Display latest assessment details"""
+def show_latest_assessment(assessment: dict[str, Any], student_label: str) -> None:
+    """Display latest assessment details."""
 
-    st.subheader("📊 Latest Assessment")
+    st.markdown("#### Latest Assessment Summary")
 
-    # Assessment metadata
-    col1, col2, col3 = st.columns(3)
+    render_metric_grid(
+        [
+            MetricDatum("Student", student_label, caption="Learner"),
+            MetricDatum("Captured On", assessment.get("assessed_on", "N/A"), caption="Assessment date"),
+            MetricDatum("Class ID", assessment.get("class_id", "N/A"), caption="Section"),
+            MetricDatum("Model Version", assessment.get("model_version", "N/A"), caption="Pipeline build"),
+        ],
+        columns=4,
+    )
 
-    with col1:
-        st.metric(
-            label="Assessment Date",
-            value=assessment.get("assessed_on", "N/A"),
-        )
-
-    with col2:
-        st.metric(
-            label="Class ID",
-            value=assessment.get("class_id", "N/A"),
-        )
-
-    with col3:
-        st.metric(
-            label="Model Version",
-            value=assessment.get("model_version", "N/A"),
-        )
-
-    # Skill scores
     skills = assessment.get("skills", [])
     if not skills:
         st.info("No skill scores available")
         return
 
-    # Prepare skill data for chart
     skill_data = {skill["skill"]: skill["score"] for skill in skills}
 
-    # Display skill chart
-    col1, col2 = st.columns([2, 1])
+    left, right = st.columns([2, 1], gap="large")
+    with left:
+        fig = create_skill_chart(skill_data, title="Current Skill Signature")
+        st.plotly_chart(fig, use_container_width=True, theme=None)
 
-    with col1:
-        fig = create_skill_chart(skill_data, title="Current Skill Scores")
-        st.plotly_chart(fig, use_container_width=True)
-
-    with col2:
-        st.write("**Skill Scores:**")
-        for skill in skills:
-            st.metric(
-                label=format_skill_name(skill["skill"]),
-                value=f"{skill['score']:.1f}/100",
-                delta=None,
-                help=f"Confidence: {skill['confidence']:.2f}",
+    with right:
+        st.markdown("#### Skill Focus")
+        for idx, skill in enumerate(skills):
+            st.markdown(
+                f"""
+                <div class="pulse-card drop-in delay-{(idx % 5) + 1}">
+                    <span class="pulse-subheading">{format_skill_name(skill['skill'])}</span>
+                    <div class="pulse-metric-value">{skill['score']:.1f}</div>
+                    <div class="pulse-pill">Confidence: {skill['confidence']:.2f}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
             )
 
 
 def show_evidence_section(evidence: dict[str, Any]) -> None:
-    """Display evidence spans for the assessment"""
+    """Display evidence spans for the assessment."""
 
-    st.subheader("🔍 Supporting Evidence")
-
+    st.markdown("#### Evidence Highlights")
     evidence_spans = evidence.get("evidence_spans", [])
-
     if not evidence_spans:
         st.info("No evidence data available")
         return
 
-    # Group evidence by skill
-    evidence_by_skill = {}
+    evidence_by_skill: dict[str, list[dict[str, Any]]] = {}
     for span in evidence_spans:
-        skill = span.get("skill", "unknown")
-        if skill not in evidence_by_skill:
-            evidence_by_skill[skill] = []
-        evidence_by_skill[skill].append(span)
+        evidence_by_skill.setdefault(span.get("skill", "unknown"), []).append(span)
 
-    # Display evidence by skill in expandable sections
-    for skill, spans in evidence_by_skill.items():
-        with st.expander(f"**{format_skill_name(skill)}** ({len(spans)} evidence spans)"):
-            for i, span in enumerate(spans, 1):
-                st.markdown(f"**Evidence {i}:**")
-                st.markdown(f"_{span.get('span_text', 'N/A')}_")
-                st.caption(f"📍 Location: {span.get('span_location', 'N/A')}")
-                if span.get("rationale"):
-                    st.info(f"💡 {span['rationale']}")
-                if span.get("score_contribution"):
-                    st.caption(f"Contribution: {span['score_contribution']:.2f}")
-                st.divider()
+    for idx, (skill, spans) in enumerate(evidence_by_skill.items()):
+        st.markdown(
+            f"<div class='pulse-subheading'>{format_skill_name(skill)}</div>",
+            unsafe_allow_html=True,
+        )
+        for span_idx, span in enumerate(spans, start=1):
+            st.markdown(
+                f"""
+                <div class="pulse-card drop-in delay-{(idx + span_idx) % 5 + 1}">
+                    <div class="pulse-pill">Evidence {span_idx}</div>
+                    <p><em>{span.get('span_text', 'N/A')}</em></p>
+                    <div class="pill-group">
+                        <span class="pulse-badge">{span.get('span_location', 'Unknown')}</span>
+                        {f"<span class='pulse-badge'>Contribution · {span.get('score_contribution', 0):.2f}</span>" if span.get('score_contribution') is not None else ''}
+                    </div>
+                    {f"<div class='pulse-subheading'>Rationale</div><p>{span.get('rationale')}</p>" if span.get('rationale') else ''}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
 
-def show_assessment_history(history: dict[str, Any], student_id: str) -> None:
-    """Display assessment history and trends"""
+def show_assessment_history(history: dict[str, Any], student_id: str, student_label: str) -> None:
+    """Display assessment history and exports."""
 
-    st.subheader("📈 Assessment History & Trends")
-
+    st.markdown("#### Progression Timeline")
     assessments = history.get("assessments", [])
-    total = history.get("total", 0)
+    if not assessments:
+        st.info("Not enough data for trends")
+        return
 
-    st.write(f"Showing {len(assessments)} of {total} total assessments")
-
-    # Prepare data for trends
-    trend_data = []
+    trend_rows = []
     for assessment in assessments:
         row = {"assessed_on": assessment["assessed_on"]}
         for skill in assessment.get("skills", []):
             row[skill["skill"]] = skill["score"]
-        trend_data.append(row)
+        trend_rows.append(row)
 
-    if not trend_data:
-        st.info("Not enough data for trends")
-        return
-
-    df = pd.DataFrame(trend_data)
+    df = pd.DataFrame(trend_rows).sort_values("assessed_on")
     df["assessed_on"] = pd.to_datetime(df["assessed_on"])
 
-    # Display trend charts for each skill
     skills = ["empathy", "adaptability", "collaboration", "communication", "self_regulation"]
-
-    # Create tabs for each skill
     tabs = st.tabs([format_skill_name(skill) for skill in skills])
-
     for tab, skill in zip(tabs, skills):
         with tab:
             if skill in df.columns:
-                fig = create_trend_chart(
-                    df, skill, title=f"{format_skill_name(skill)} Over Time"
-                )
-                st.plotly_chart(fig, use_container_width=True)
+                fig = create_trend_chart(df, skill, title=f"{format_skill_name(skill)} Over Time")
+                st.plotly_chart(fig, use_container_width=True, theme=None)
             else:
-                st.info(f"No data available for {format_skill_name(skill)}")
+                st.info("No data available for this skill.")
 
-    # Assessment history table
-    st.markdown("### 📋 Assessment History Table")
-
-    table_data = []
+    st.markdown("#### Assessment Ledger")
+    ledger_rows = []
     for assessment in assessments:
         row = {
             "Assessment ID": str(assessment["assessment_id"]),
-            "Date": assessment["assessed_on"],
-            "Class ID": assessment.get("class_id", "N/A"),
+            "Recorded": assessment["assessed_on"],
+            "Class": assessment.get("class_id", "N/A"),
         }
-
-        # Add skill scores
         for skill in assessment.get("skills", []):
             row[format_skill_name(skill["skill"])] = f"{skill['score']:.1f}"
+        ledger_rows.append(row)
 
-        table_data.append(row)
-
-    df_table = pd.DataFrame(table_data)
-
+    ledger_df = pd.DataFrame(ledger_rows)
     st.dataframe(
-        df_table,
+        ledger_df,
         use_container_width=True,
         hide_index=True,
-        height=400,
+        height=360,
     )
 
-    # Export options
-    st.markdown("### 📥 Export Options")
-
+    st.markdown("#### Export")
     col1, col2 = st.columns(2)
-
     with col1:
-        csv_data = export_to_csv(table_data)
+        csv_data = export_to_csv(ledger_rows)
         st.download_button(
-            label="📄 Download as CSV",
+            label="📄 CSV Export",
             data=csv_data,
             file_name=f"student_{student_id}_history.csv",
             mime="text/csv",
             use_container_width=True,
         )
-
     with col2:
         pdf_data = export_to_pdf(
-            title=f"Student Assessment History",
-            data=table_data,
-            student_name=f"Student ID: {student_id}",
+            title="Student Assessment History",
+            data=ledger_rows,
+            student_name=student_label,
         )
         st.download_button(
-            label="📑 Download as PDF",
+            label="📑 PDF Snapshot",
             data=pdf_data,
             file_name=f"student_{student_id}_history.pdf",
             mime="application/pdf",
             use_container_width=True,
         )
+
+
+def _build_mock_student_payload(student_id: str, student_label: str) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Construct mock data for a student when the API is unavailable."""
+
+    random.seed(hash(student_id) % 1_000_003)
+    base_date = date.today()
+    skill_list = ["empathy", "adaptability", "collaboration", "communication", "self_regulation"]
+
+    history_assessments = []
+    for weeks_ago in range(12):
+        assessed_on = base_date - timedelta(days=7 * weeks_ago)
+        skills = []
+        for skill in skill_list:
+            score = random.uniform(60, 95) + weeks_ago * random.uniform(-0.6, 0.6)
+            skills.append(
+                {
+                    "skill": skill,
+                    "score": round(max(55, min(score, 98)), 1),
+                    "confidence": round(random.uniform(0.62, 0.94), 2),
+                }
+            )
+
+        history_assessments.append(
+            {
+                "assessment_id": uuid4(),
+                "student_id": UUID(student_id),
+                "class_id": f"MS-7{random.choice(['A', 'B'])}",
+                "assessed_on": assessed_on.isoformat(),
+                "skills": skills,
+            }
+        )
+
+    history_assessments.sort(key=lambda x: x["assessed_on"], reverse=True)
+    latest = history_assessments[0]
+
+    evidence_spans = []
+    for skill in skill_list:
+        for idx in range(2):
+            evidence_spans.append(
+                {
+                    "evidence_id": str(uuid4()),
+                    "skill": skill,
+                    "span_text": f"{student_label} demonstrated {format_skill_name(skill).lower()} during project stand-up {idx + 1}.",
+                    "span_location": f"Transcript line {random.randint(20, 120)}",
+                    "rationale": f"Highlights clear indicators of {format_skill_name(skill).lower()}.",
+                    "score_contribution": round(random.uniform(0.35, 0.85), 2),
+                }
+            )
+
+    latest_payload = {
+        "assessment_id": latest["assessment_id"],
+        "student_id": latest["student_id"],
+        "class_id": latest["class_id"],
+        "assessed_on": latest["assessed_on"],
+        "model_version": "1.0.0-sim",
+        "skills": latest["skills"],
+    }
+
+    history_payload = {
+        "student_id": latest["student_id"],
+        "assessments": history_assessments,
+        "total": len(history_assessments),
+    }
+
+    evidence_payload = {
+        "assessment_id": latest["assessment_id"],
+        "evidence_spans": evidence_spans,
+        "total": len(evidence_spans),
+    }
+
+    return latest_payload, history_payload, evidence_payload

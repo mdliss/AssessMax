@@ -1,93 +1,198 @@
-"""Trends page - Display class and student trends over time"""
+"""Trends view – longitudinal analytics for classes and students."""
 
+from __future__ import annotations
+
+import random
+from datetime import date, timedelta
+from typing import Any
+
+import pandas as pd
+import plotly.express as px
 import streamlit as st
+
+from components import MetricDatum, render_logo_badge, render_metric_grid, render_notification
+from utils import create_trend_chart, format_skill_name
+
+SKILLS = ["empathy", "adaptability", "collaboration", "communication", "self_regulation"]
 
 
 def show_trends() -> None:
-    """Display trends analysis page"""
+    """Display trend analysis with multi-week rollups."""
 
-    st.title("📈 Trends Analysis")
-    st.markdown("View skill progression trends over time (4-12 weeks)")
+    render_logo_badge("Trend Horizon", "Detect growth momentum across cohorts and learners")
 
-    # Time range selection
-    col1, col2 = st.columns([2, 1])
-
+    col1, col2, col3 = st.columns([2, 1, 1], gap="large")
     with col1:
-        time_range = st.selectbox(
-            "Select Time Range",
-            ["4 weeks", "8 weeks", "12 weeks"],
-            help="Choose the time period for trend analysis",
+        time_range = st.select_slider(
+            "Window",
+            options=[4, 8, 12],
+            value=8,
+            format_func=lambda x: f"{x} week window",
+            help="Select the time horizon for the trend analysis.",
         )
-
     with col2:
-        view_type = st.radio("View Type", ["Class", "Student"], horizontal=True)
+        view_type = st.radio(
+            "View Mode",
+            ["Class", "Student"],
+            index=0,
+            help="Toggle between class-wide and individual insights.",
+        )
+    with col3:
+        smoothing = st.selectbox(
+            "Smoothing",
+            ["Simple Moving Average", "Exponential"],
+            help="Choose the smoothing algorithm for trend lines.",
+        )
 
-    st.divider()
+    st.markdown("<div class='pulse-divider'></div>", unsafe_allow_html=True)
 
-    # Class or Student selection
     if view_type == "Class":
-        class_id = st.text_input(
-            "Enter Class ID",
-            value="MATH-7A",
-            help="Enter the class identifier",
-        )
-
-        if class_id:
-            show_class_trends(class_id, time_range)
-        else:
-            st.info("ℹ️ Please enter a class ID")
-
-    else:  # Student view
-        student_id = st.text_input(
-            "Enter Student ID (UUID)",
-            help="Enter the student's UUID",
-        )
-
-        if student_id:
-            show_student_trends(student_id, time_range)
-        else:
-            st.info("ℹ️ Please enter a student ID")
+        _render_class_trends(time_range, smoothing)
+    else:
+        _render_student_trends(time_range, smoothing)
 
 
-def show_class_trends(class_id: str, time_range: str) -> None:
-    """Display class-level trends"""
-
-    st.subheader(f"📊 Class Trends - {class_id}")
-
-    st.info(
-        """
-        **Coming Soon**
-
-        This feature will display:
-        - Class average skill scores over time
-        - Skill progression trends
-        - Student participation rates
-        - Assessment frequency
-        """
+def _render_class_trends(time_range: int, smoothing: str) -> None:
+    class_id = st.text_input(
+        "Class Identifier",
+        value="MS-7A",
+        help="Enter the cohort identifier to visualize. Defaults to synthetic class data.",
     )
 
-    # Placeholder for trend visualization
-    st.markdown("### 📈 Skill Progression")
-    st.write(f"Time range: {time_range}")
+    if not class_id:
+        st.info("ℹ️ Provide a class identifier to build the timeline.")
+        return
 
-
-def show_student_trends(student_id: str, time_range: str) -> None:
-    """Display student-level trends"""
-
-    st.subheader(f"👤 Student Trends - {student_id}")
-
-    st.info(
-        """
-        **Coming Soon**
-
-        This feature will display:
-        - Individual skill score progression
-        - Comparison with class averages
-        - Growth rate analysis
-        - Skill strengths and areas for improvement
-        """
+    df = _generate_trend_dataframe(time_range, seed=hash(class_id) % 1_000_000)
+    render_notification(
+        "Using synthetic class telemetry aligned with rubric expectations. Connect the backend API to stream real data.",
+        label="Demo Mode",
     )
 
-    # Placeholder for trend visualization
-    st.markdown("### 📈 Personal Growth")
-    st.write(f"Time range: {time_range}")
+    cohort_metrics = _calculate_cohort_metrics(df)
+    render_metric_grid(
+        [
+            MetricDatum("Window Span", f"{time_range} weeks", caption="Trend horizon"),
+            MetricDatum("Top Skill Momentum", cohort_metrics["top_skill"], delta=f"{cohort_metrics['top_delta']:+.1f}", delta_variant="up"),
+            MetricDatum("Participation", f"{cohort_metrics['participation']}%", caption="Roster coverage"),
+            MetricDatum("Average Growth", f"{cohort_metrics['avg_growth']:+.1f}", caption="All skills Δ"),
+        ],
+        columns=4,
+    )
+
+    st.markdown("#### Multi-skill Overlay")
+    overlay_fig = px.line(
+        df.melt(id_vars="assessed_on", value_vars=SKILLS, var_name="skill", value_name="score"),
+        x="assessed_on",
+        y="score",
+        color="skill",
+        color_discrete_sequence=[ "#14b8a6", "#0ea5e9", "#6366f1", "#f472b6", "#f97316" ],
+        markers=True,
+    )
+    overlay_fig.update_traces(marker=dict(size=6, line=dict(width=1, color="rgba(0,0,0,0.35)")))
+    overlay_fig.update_layout(
+        hovermode="x unified",
+        xaxis_title="Assessment Date",
+        yaxis_title="Average Score",
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(20,20,20,0.78)",
+        legend_title_text="Skill",
+    )
+    st.plotly_chart(overlay_fig, use_container_width=True, theme=None)
+
+    st.markdown("#### Skill Spotlight")
+    tabs = st.tabs([format_skill_name(skill) for skill in SKILLS])
+    for tab, skill in zip(tabs, SKILLS):
+        with tab:
+            fig = create_trend_chart(df, skill, title=f"{format_skill_name(skill)} Momentum")
+            st.plotly_chart(fig, use_container_width=True, theme=None)
+
+
+def _render_student_trends(time_range: int, smoothing: str) -> None:
+    student_id = st.text_input(
+        "Student UUID",
+        value="550e8400-e29b-41d4-a716-446655440001",
+        help="Paste a student UUID. Defaults to a synthetic exemplar for demo mode.",
+    )
+
+    if not student_id:
+        st.info("ℹ️ Provide a student UUID to examine their progression.")
+        return
+
+    df = _generate_trend_dataframe(time_range, seed=hash(student_id) % 1_000_000 + 42)
+    render_notification(
+        "Streaming rubric-compliant synthetic data. Connect the assessments API for real learner trajectories.",
+        label="Demo Mode",
+    )
+
+    momentum = _calculate_student_momentum(df)
+    render_metric_grid(
+        [
+            MetricDatum("Momentum Skill", momentum["focus_skill"], delta=f"{momentum['delta']:+.1f}", delta_variant="up"),
+            MetricDatum("Latest Score", f"{momentum['latest']:.1f}", caption="Peak skill"),
+            MetricDatum("Confidence Window", f"{momentum['stability']}%", caption="Score stability range"),
+            MetricDatum("Sessions Analyzed", str(len(df)), caption="Assessments"),
+        ],
+        columns=4,
+    )
+
+    st.markdown("#### Personal Trendlines")
+    tabs = st.tabs([format_skill_name(skill) for skill in SKILLS])
+    for tab, skill in zip(tabs, SKILLS):
+        with tab:
+            fig = create_trend_chart(df, skill, title=f"{format_skill_name(skill)} Progression")
+            st.plotly_chart(fig, use_container_width=True, theme=None)
+
+
+def _generate_trend_dataframe(weeks: int, seed: int) -> pd.DataFrame:
+    """Generate synthetic trend data for each skill."""
+
+    random.seed(seed)
+    base_date = date.today()
+    rows: list[dict[str, Any]] = []
+
+    score_baseline = {skill: random.uniform(60, 80) for skill in SKILLS}
+
+    for week in range(weeks):
+        assessed_on = base_date - timedelta(days=7 * (weeks - week - 1))
+        row = {"assessed_on": assessed_on}
+        for skill in SKILLS:
+            drift = random.uniform(-2.5, 3.5)
+            previous = rows[-1][skill] if rows else score_baseline[skill]
+            score = max(55, min(previous + drift, 98))
+            row[skill] = round(score, 1)
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+    df["assessed_on"] = pd.to_datetime(df["assessed_on"])
+    return df
+
+
+def _calculate_cohort_metrics(df: pd.DataFrame) -> dict[str, Any]:
+    deltas = {skill: df[skill].iloc[-1] - df[skill].iloc[0] for skill in SKILLS}
+    top_skill = max(deltas, key=deltas.get)
+    participation = random.randint(88, 97)
+    avg_growth = sum(deltas.values()) / len(deltas)
+    return {
+        "top_skill": format_skill_name(top_skill),
+        "top_delta": deltas[top_skill],
+        "participation": participation,
+        "avg_growth": avg_growth,
+    }
+
+
+def _calculate_student_momentum(df: pd.DataFrame) -> dict[str, Any]:
+    latest_scores = {skill: df[skill].iloc[-1] for skill in SKILLS}
+    focus_skill = max(latest_scores, key=latest_scores.get)
+    delta = latest_scores[focus_skill] - df[focus_skill].iloc[0]
+    stability = round(
+        (df[focus_skill].rolling(window=3, min_periods=1).std().fillna(0).mean() / latest_scores[focus_skill]) * 100,
+        1,
+    )
+    return {
+        "focus_skill": format_skill_name(focus_skill),
+        "delta": delta,
+        "latest": latest_scores[focus_skill],
+        "stability": max(0, 100 - stability),
+    }

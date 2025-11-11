@@ -54,8 +54,8 @@ def create_skill_chart(data: dict[str, float], title: str = "Skill Scores") -> g
             theta=skills,
             fill="toself",
             name="Scores",
-            line=dict(color="#0066CC", width=2),
-            fillcolor="rgba(0, 102, 204, 0.3)",
+            line=dict(color="#14b8a6", width=3),
+            fillcolor="rgba(20, 184, 166, 0.32)",
         )
     )
 
@@ -67,13 +67,21 @@ def create_skill_chart(data: dict[str, float], title: str = "Skill Scores") -> g
                 tickmode="linear",
                 tick0=0,
                 dtick=20,
-            )
+                gridcolor="rgba(38, 38, 38, 0.7)",
+                linecolor="rgba(38, 38, 38, 0.7)",
+                tickfont=dict(color="#b3b3b3"),
+            ),
+            angularaxis=dict(
+                tickfont=dict(color="#d1d5db", size=11, family="Roboto Mono"),
+            ),
         ),
         showlegend=False,
-        title=dict(text=title, x=0.5, xanchor="center"),
+        title=dict(text=title, x=0.5, xanchor="center", font=dict(color="#ffffff", size=18)),
+        margin=dict(l=45, r=45, t=70, b=45),
         height=400,
     )
 
+    _apply_dark_plot_theme(fig)
     return fig
 
 
@@ -102,7 +110,8 @@ def create_trend_chart(
 
     fig.update_traces(
         line=dict(color=get_skill_color(skill), width=3),
-        marker=dict(size=8),
+        marker=dict(size=9, line=dict(width=1.5, color="rgba(255,255,255,0.85)")),
+        hovertemplate="<b>%{y:.1f}</b><br>%{x|%Y-%m-%d}<extra></extra>",
     )
 
     fig.update_layout(
@@ -110,9 +119,18 @@ def create_trend_chart(
         xaxis_title="Assessment Date",
         yaxis_title="Score",
         yaxis_range=[0, 100],
+        xaxis=dict(
+            gridcolor="rgba(38, 38, 38, 0.6)",
+            tickfont=dict(color="#b3b3b3", family="Roboto Mono"),
+        ),
+        yaxis=dict(
+            gridcolor="rgba(38, 38, 38, 0.6)",
+            tickfont=dict(color="#b3b3b3", family="Roboto Mono"),
+        ),
         height=400,
     )
 
+    _apply_dark_plot_theme(fig)
     return fig
 
 
@@ -159,7 +177,7 @@ def export_to_pdf(
         "CustomTitle",
         parent=styles["Heading1"],
         fontSize=16,
-        textColor=colors.HexColor("#0066CC"),
+        textColor=colors.HexColor("#14b8a6"),
         spaceAfter=20,
     )
 
@@ -187,14 +205,15 @@ def export_to_pdf(
         table.setStyle(
             TableStyle(
                 [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0066CC")),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#14b8a6")),
                     ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
                     ("ALIGN", (0, 0), (-1, -1), "CENTER"),
                     ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                     ("FONTSIZE", (0, 0), (-1, 0), 12),
                     ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
-                    ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
-                    ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                    ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#1f1f1f")),
+                    ("TEXTCOLOR", (0, 1), (-1, -1), colors.whitesmoke),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#0d9488")),
                 ]
             )
         )
@@ -220,3 +239,19 @@ def parse_uuid(uuid_str: str) -> UUID:
         return UUID(uuid_str)
     except (ValueError, AttributeError):
         raise ValueError(f"Invalid UUID: {uuid_str}")
+
+
+def _apply_dark_plot_theme(fig: go.Figure) -> None:
+    """Apply the PulseMax dark theme to a Plotly figure in-place."""
+
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(20,20,20,0.78)",
+        font=dict(color="#d1d5db", family="Roboto Mono"),
+        legend=dict(
+            bgcolor="rgba(20,20,20,0.6)",
+            bordercolor="rgba(38,38,38,0.6)",
+            borderwidth=1,
+        ),
+    )
