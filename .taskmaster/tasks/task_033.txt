@@ -1,0 +1,11 @@
+# Task ID: 33
+# Title: Develop Job Status API
+# Status: pending
+# Dependencies: 28
+# Priority: low
+# Description: Create an API endpoint to check the status of processing jobs.
+# Details:
+Implement FastAPI endpoint at /v1/admin/jobs/{job_id} to return job status and logs. Integrate with DynamoDB for metadata retrieval.
+
+# Test Strategy:
+Test job status retrieval for accuracy and completeness. Verify log access and error reporting.

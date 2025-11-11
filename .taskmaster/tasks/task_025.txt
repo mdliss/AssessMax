@@ -1,0 +1,11 @@
+# Task ID: 25
+# Title: Create Evidence Extraction Module
+# Status: pending
+# Dependencies: 24
+# Priority: medium
+# Description: Extract and rank evidence spans for each skill score.
+# Details:
+Develop a module to extract text spans from transcripts and artifacts. Rank spans based on relevance and provide rationales. Cite transcript line numbers or artifact pages.
+
+# Test Strategy:
+Check evidence spans for accuracy and relevance. Ensure spans map to correct lines/pages.

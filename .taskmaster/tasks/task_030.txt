@@ -1,0 +1,11 @@
+# Task ID: 30
+# Title: Implement Class Dashboard API
+# Status: pending
+# Dependencies: 29
+# Priority: medium
+# Description: Create an API endpoint for class rollup data.
+# Details:
+Develop a FastAPI endpoint at /v1/classes/{class_id}/dashboard to provide class-level assessment summaries and trends.
+
+# Test Strategy:
+Validate class dashboard data accuracy and response times. Ensure data is aggregated correctly.

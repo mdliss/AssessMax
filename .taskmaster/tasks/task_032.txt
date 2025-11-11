@@ -1,0 +1,11 @@
+# Task ID: 32
+# Title: Implement Health Check Endpoint
+# Status: pending
+# Dependencies: 21
+# Priority: low
+# Description: Create a health check endpoint for service monitoring.
+# Details:
+Develop a FastAPI endpoint at /healthz to return service status. Integrate with AWS CloudWatch for monitoring.
+
+# Test Strategy:
+Test health check endpoint for availability and correct status reporting. Monitor logs in CloudWatch.

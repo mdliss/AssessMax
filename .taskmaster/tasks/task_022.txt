@@ -1,0 +1,31 @@
+# Task ID: 22
+# Title: Implement Transcript Ingestion Endpoint
+# Status: pending
+# Dependencies: 21
+# Priority: high
+# Description: Create an API endpoint to ingest classroom transcripts in various formats.
+# Details:
+Develop a FastAPI endpoint at /v1/ingest/transcripts to accept JSONL, CSV, and TXT files. Validate metadata including class_id, student_roster, date, and source. Store files in S3 and metadata in DynamoDB.
+
+# Test Strategy:
+Test file uploads for all supported formats. Validate metadata storage in DynamoDB and file storage in S3.
+
+# Subtasks:
+## 1. Develop FastAPI Endpoint for Transcript Ingestion [pending]
+### Dependencies: None
+### Description: Create the FastAPI endpoint at /v1/ingest/transcripts to handle transcript ingestion.
+### Details:
+Set up a FastAPI route to accept POST requests at /v1/ingest/transcripts. Ensure the endpoint can handle file uploads.
+
+## 2. Implement File Format Validation [pending]
+### Dependencies: 22.1
+### Description: Validate the uploaded files to ensure they are in JSONL, CSV, or TXT format.
+### Details:
+Use Python libraries to check file headers and content for format compliance. Return errors for unsupported formats.
+
+## 3. Integrate with S3 and DynamoDB [pending]
+### Dependencies: 22.1, 22.2
+### Description: Store files in S3 and metadata in DynamoDB after validation.
+### Details:
+Use boto3 to upload files to S3 and store metadata such as class_id, student_roster, date, and source in DynamoDB.
+

@@ -1,0 +1,37 @@
+# Task ID: 27
+# Title: Implement State Persistence and History
+# Status: pending
+# Dependencies: 22, 23, 24
+# Priority: medium
+# Description: Set up PostgreSQL and DynamoDB for data persistence and history tracking.
+# Details:
+Design PostgreSQL schema for assessments, evidence, and aggregates. Use DynamoDB for job metadata. Implement S3 versioning for raw inputs and anonymized copies.
+
+# Test Strategy:
+Verify data persistence and retrieval from PostgreSQL and DynamoDB. Test S3 versioning and data integrity.
+
+# Subtasks:
+## 1. Design PostgreSQL Schema for Assessments [pending]
+### Dependencies: None
+### Description: Create a detailed schema for storing assessment data in PostgreSQL.
+### Details:
+Define tables for assessments, including fields for assessment ID, type, date, and results. Ensure normalization and indexing for efficient queries.
+
+## 2. Design PostgreSQL Schema for Evidence and Aggregates [pending]
+### Dependencies: 27.1
+### Description: Develop schema for evidence and aggregate data in PostgreSQL.
+### Details:
+Create tables for evidence with fields for evidence ID, type, and associated assessment ID. Design aggregate tables for summary data.
+
+## 3. Integrate DynamoDB for Job Metadata [pending]
+### Dependencies: None
+### Description: Set up DynamoDB tables for storing job metadata.
+### Details:
+Define a table for job metadata with fields for job ID, status, and timestamps. Implement indexing for quick access.
+
+## 4. Implement S3 Versioning for Raw Inputs [pending]
+### Dependencies: None
+### Description: Set up S3 versioning for raw input files and anonymized copies.
+### Details:
+Configure S3 buckets to enable versioning. Ensure that both raw and anonymized files are versioned correctly.
+

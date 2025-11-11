@@ -1,0 +1,133 @@
+{
+	"meta": {
+		"generatedAt": "2025-11-11T01:58:11.315Z",
+		"tasksAnalyzed": 15,
+		"totalTasks": 15,
+		"analysisCount": 15,
+		"thresholdScore": 7,
+		"projectName": "Taskmaster",
+		"usedResearch": false
+	},
+	"complexityAnalysis": [
+		{
+			"taskId": 21,
+			"taskTitle": "Setup Authentication System",
+			"complexityScore": 8,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Break down the setup of AWS Cognito user pools, role-based access control implementation, and session management into separate subtasks.",
+			"reasoning": "This task involves configuring AWS Cognito, implementing role-based access, and ensuring secure session management. Each component requires specific expertise and thorough testing, contributing to a high complexity score."
+		},
+		{
+			"taskId": 22,
+			"taskTitle": "Implement Transcript Ingestion Endpoint",
+			"complexityScore": 7,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Divide the task into subtasks for endpoint development, file format validation, and integration with S3 and DynamoDB.",
+			"reasoning": "The task requires handling multiple file formats, validating metadata, and integrating with AWS services. These aspects introduce technical challenges and dependencies, making it moderately complex."
+		},
+		{
+			"taskId": 23,
+			"taskTitle": "Implement Artifact Ingestion Endpoint",
+			"complexityScore": 7,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Create subtasks for endpoint development, presigned URL implementation, and file size and metadata validation.",
+			"reasoning": "Handling multiple file types and using presigned URLs for uploads adds complexity. Ensuring proper validation and integration with AWS services further increases the task's complexity."
+		},
+		{
+			"taskId": 24,
+			"taskTitle": "Develop NLP Scoring Pipeline",
+			"complexityScore": 9,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down the pipeline into subtasks for each stage: language detection, cleanup, segmentation, diarization, skill detection, scoring, and explanation extraction.",
+			"reasoning": "This task involves multiple stages of NLP processing, each requiring specialized tools and techniques. Ensuring reproducibility and accuracy adds to its complexity."
+		},
+		{
+			"taskId": 25,
+			"taskTitle": "Create Evidence Extraction Module",
+			"complexityScore": 6,
+			"recommendedSubtasks": 2,
+			"expansionPrompt": "Divide the task into subtasks for text span extraction and relevance ranking implementation.",
+			"reasoning": "The task involves developing algorithms for text extraction and ranking, which require careful design and testing to ensure accuracy and relevance."
+		},
+		{
+			"taskId": 26,
+			"taskTitle": "Design Streamlit Dashboard",
+			"complexityScore": 7,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Create subtasks for each dashboard view, accessibility compliance, and export functionality implementation.",
+			"reasoning": "Designing a comprehensive dashboard with multiple views and ensuring accessibility compliance involves significant effort and testing, contributing to its complexity."
+		},
+		{
+			"taskId": 27,
+			"taskTitle": "Implement State Persistence and History",
+			"complexityScore": 8,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Break down the task into subtasks for PostgreSQL schema design, DynamoDB integration, and S3 versioning setup.",
+			"reasoning": "Designing schemas and ensuring data integrity across multiple storage solutions introduces complexity. The task also involves ensuring data versioning and history tracking."
+		},
+		{
+			"taskId": 28,
+			"taskTitle": "Develop Batch Processing with AWS Lambda",
+			"complexityScore": 8,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Divide the task into subtasks for Lambda function setup, SQS integration, and Step Functions orchestration.",
+			"reasoning": "The task involves setting up asynchronous processing with AWS services, requiring careful orchestration and testing for scalability and reliability."
+		},
+		{
+			"taskId": 29,
+			"taskTitle": "Create API for Assessment Retrieval",
+			"complexityScore": 6,
+			"recommendedSubtasks": 2,
+			"expansionPrompt": "Create subtasks for endpoint development and historical data retrieval implementation.",
+			"reasoning": "Developing endpoints for data retrieval requires ensuring accuracy and completeness, especially when dealing with historical data, adding to its complexity."
+		},
+		{
+			"taskId": 30,
+			"taskTitle": "Implement Class Dashboard API",
+			"complexityScore": 5,
+			"recommendedSubtasks": 2,
+			"expansionPrompt": "Divide the task into subtasks for endpoint development and data aggregation logic implementation.",
+			"reasoning": "The task involves developing an API for class-level data aggregation, which requires ensuring data accuracy and efficient response times."
+		},
+		{
+			"taskId": 31,
+			"taskTitle": "Set Up Deployment Pipeline",
+			"complexityScore": 7,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Break down the task into subtasks for CI/CD setup, security scans, and deployment strategy implementation.",
+			"reasoning": "Configuring a CI/CD pipeline with automated testing and deployment strategies involves multiple steps and requires ensuring no downtime, adding to its complexity."
+		},
+		{
+			"taskId": 32,
+			"taskTitle": "Implement Health Check Endpoint",
+			"complexityScore": 3,
+			"recommendedSubtasks": 1,
+			"expansionPrompt": "Create a subtask for endpoint development and CloudWatch integration.",
+			"reasoning": "The task is relatively straightforward, involving the development of a simple endpoint and integration with monitoring services, resulting in a low complexity score."
+		},
+		{
+			"taskId": 33,
+			"taskTitle": "Develop Job Status API",
+			"complexityScore": 4,
+			"recommendedSubtasks": 1,
+			"expansionPrompt": "Create a subtask for endpoint development and DynamoDB integration.",
+			"reasoning": "The task involves developing an API for job status retrieval, which is relatively simple but requires ensuring accurate metadata retrieval and log access."
+		},
+		{
+			"taskId": 34,
+			"taskTitle": "Implement Security and Audit Logging",
+			"complexityScore": 9,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Divide the task into subtasks for security configuration, audit logging setup, and compliance verification.",
+			"reasoning": "Ensuring security and compliance with data protection standards involves configuring multiple systems and thorough testing, making it highly complex."
+		},
+		{
+			"taskId": 35,
+			"taskTitle": "Conduct MVP Testing and Validation",
+			"complexityScore": 8,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down the task into subtasks for different testing phases: functionality, user flows, resilience, and security.",
+			"reasoning": "Comprehensive testing of MVP features involves multiple testing phases and addressing any identified issues, requiring significant effort and coordination."
+		}
+	]
+}

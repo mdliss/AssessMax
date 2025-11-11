@@ -1,0 +1,11 @@
+# Task ID: 29
+# Title: Create API for Assessment Retrieval
+# Status: pending
+# Dependencies: 24, 25
+# Priority: medium
+# Description: Develop endpoints to retrieve skill scores and evidence for students.
+# Details:
+Implement FastAPI endpoints at /v1/assessments/{student_id} and /v1/assessments/{student_id}/history to return latest scores and historical data.
+
+# Test Strategy:
+Test API responses for accuracy and completeness. Verify historical data retrieval.
