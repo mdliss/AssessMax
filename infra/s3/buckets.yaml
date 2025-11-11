@@ -1,0 +1,306 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 Buckets for AssessMax File Storage with Versioning and Encryption
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name
+
+  LogRetentionDays:
+    Type: Number
+    Default: 90
+    Description: Number of days to retain access logs
+
+Resources:
+  # KMS Key for S3 Encryption
+  S3EncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub KMS key for S3 bucket encryption - ${Environment}
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: '*'
+          - Sid: Allow S3 to use the key
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+            Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  S3EncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub alias/${Environment}-assessmax-s3
+      TargetKeyId: !Ref S3EncryptionKey
+
+  # Access Logs Bucket
+  AccessLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${Environment}-assessmax-access-logs-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: !Ref LogRetentionDays
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: AccessLogs
+
+  # Raw Uploads Bucket - Original files
+  RawBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${Environment}-assessmax-raw-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !GetAtt S3EncryptionKey.Arn
+            BucketKeyEnabled: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref AccessLogsBucket
+        LogFilePrefix: raw-bucket-logs/
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+              - TransitionInDays: 90
+                StorageClass: GLACIER
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 90
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+            AllowedHeaders:
+              - '*'
+            MaxAge: 3000
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: RawUploads
+
+  # Normalized Bucket - Processed transcripts
+  NormalizedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${Environment}-assessmax-normalized-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !GetAtt S3EncryptionKey.Arn
+            BucketKeyEnabled: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref AccessLogsBucket
+        LogFilePrefix: normalized-bucket-logs/
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: NormalizedTranscripts
+
+  # Outputs Bucket - Scoring results and reports
+  OutputsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${Environment}-assessmax-outputs-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !GetAtt S3EncryptionKey.Arn
+            BucketKeyEnabled: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref AccessLogsBucket
+        LogFilePrefix: outputs-bucket-logs/
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 60
+                StorageClass: STANDARD_IA
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 60
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: ScoringOutputs
+
+  # Bucket Policies
+  RawBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref RawBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt RawBucket.Arn
+              - !Sub ${RawBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  NormalizedBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref NormalizedBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt NormalizedBucket.Arn
+              - !Sub ${NormalizedBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  OutputsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref OutputsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt OutputsBucket.Arn
+              - !Sub ${OutputsBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+Outputs:
+  S3EncryptionKeyId:
+    Description: KMS Key ID for S3 Encryption
+    Value: !Ref S3EncryptionKey
+    Export:
+      Name: !Sub ${Environment}-S3EncryptionKeyId
+
+  S3EncryptionKeyArn:
+    Description: KMS Key ARN for S3 Encryption
+    Value: !GetAtt S3EncryptionKey.Arn
+    Export:
+      Name: !Sub ${Environment}-S3EncryptionKeyArn
+
+  RawBucketName:
+    Description: Raw Uploads S3 Bucket Name
+    Value: !Ref RawBucket
+    Export:
+      Name: !Sub ${Environment}-RawBucketName
+
+  RawBucketArn:
+    Description: Raw Uploads S3 Bucket ARN
+    Value: !GetAtt RawBucket.Arn
+    Export:
+      Name: !Sub ${Environment}-RawBucketArn
+
+  NormalizedBucketName:
+    Description: Normalized Transcripts S3 Bucket Name
+    Value: !Ref NormalizedBucket
+    Export:
+      Name: !Sub ${Environment}-NormalizedBucketName
+
+  NormalizedBucketArn:
+    Description: Normalized Transcripts S3 Bucket ARN
+    Value: !GetAtt NormalizedBucket.Arn
+    Export:
+      Name: !Sub ${Environment}-NormalizedBucketArn
+
+  OutputsBucketName:
+    Description: Outputs S3 Bucket Name
+    Value: !Ref OutputsBucket
+    Export:
+      Name: !Sub ${Environment}-OutputsBucketName
+
+  OutputsBucketArn:
+    Description: Outputs S3 Bucket ARN
+    Value: !GetAtt OutputsBucket.Arn
+    Export:
+      Name: !Sub ${Environment}-OutputsBucketArn
+
+  AccessLogsBucketName:
+    Description: Access Logs S3 Bucket Name
+    Value: !Ref AccessLogsBucket
+    Export:
+      Name: !Sub ${Environment}-AccessLogsBucketName

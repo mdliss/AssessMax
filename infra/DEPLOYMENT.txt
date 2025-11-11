@@ -1,0 +1,277 @@
+AssessMax Infrastructure Deployment Guide
+=========================================
+
+This guide covers deploying all AWS infrastructure components for AssessMax.
+
+Prerequisites
+-------------
+- AWS CLI configured with appropriate credentials
+- AWS account with sufficient permissions
+- Environment variable set: export ENVIRONMENT=dev|staging|prod
+
+Deployment Order
+----------------
+
+1. S3 Buckets (First - needed for other services)
+2. DynamoDB Tables (Second - needed for job tracking)
+3. SQS Queues (Third - needed for Lambda triggers)
+4. Lambda Functions (Fourth - processes data)
+5. Step Functions (Last - orchestrates everything)
+
+Step-by-Step Deployment
+------------------------
+
+## 1. Deploy S3 Buckets with Versioning and Encryption
+
+cd infra/s3/
+aws cloudformation deploy \
+  --template-file buckets.yaml \
+  --stack-name ${ENVIRONMENT}-assessmax-s3 \
+  --parameter-overrides Environment=${ENVIRONMENT} \
+  --capabilities CAPABILITY_IAM \
+  --tags Environment=${ENVIRONMENT} Project=AssessMax
+
+# Verify deployment
+aws cloudformation describe-stacks \
+  --stack-name ${ENVIRONMENT}-assessmax-s3 \
+  --query 'Stacks[0].Outputs'
+
+## 2. Deploy DynamoDB Tables
+
+cd infra/dynamodb/
+aws cloudformation deploy \
+  --template-file tables.yaml \
+  --stack-name ${ENVIRONMENT}-assessmax-dynamodb \
+  --parameter-overrides Environment=${ENVIRONMENT} \
+  --tags Environment=${ENVIRONMENT} Project=AssessMax
+
+# Verify deployment
+aws cloudformation describe-stacks \
+  --stack-name ${ENVIRONMENT}-assessmax-dynamodb \
+  --query 'Stacks[0].Outputs'
+
+## 3. Deploy SQS Queues
+
+cd infra/sqs/
+aws cloudformation deploy \
+  --template-file queues.yaml \
+  --stack-name ${ENVIRONMENT}-assessmax-sqs \
+  --parameter-overrides Environment=${ENVIRONMENT} \
+  --tags Environment=${ENVIRONMENT} Project=AssessMax
+
+# Verify deployment
+aws cloudformation describe-stacks \
+  --stack-name ${ENVIRONMENT}-assessmax-sqs \
+  --query 'Stacks[0].Outputs'
+
+## 4. Deploy Lambda Functions
+
+# Note: Lambda deployment requires building and zipping code first
+# See backend/lambdas/README for detailed instructions
+
+cd backend/lambdas/
+
+# Build and deploy normalization Lambda
+cd normalization/
+pip install -r requirements.txt -t package/
+cd package && zip -r ../normalization.zip .
+cd .. && zip -g normalization.zip handler.py
+
+aws lambda create-function \
+  --function-name ${ENVIRONMENT}-assessmax-normalization \
+  --runtime python3.11 \
+  --role arn:aws:iam::${AWS_ACCOUNT_ID}:role/lambda-execution-role \
+  --handler handler.handler \
+  --zip-file fileb://normalization.zip \
+  --timeout 300 \
+  --memory-size 512
+
+# Build and deploy scoring Lambda
+cd ../scoring/
+pip install -r requirements.txt -t package/
+cd package && zip -r ../scoring.zip .
+cd .. && zip -g scoring.zip handler.py
+
+aws lambda create-function \
+  --function-name ${ENVIRONMENT}-assessmax-scoring \
+  --runtime python3.11 \
+  --role arn:aws:iam::${AWS_ACCOUNT_ID}:role/lambda-execution-role \
+  --handler handler.handler \
+  --zip-file fileb://scoring.zip \
+  --timeout 900 \
+  --memory-size 2048
+
+## 5. Deploy Step Functions State Machine
+
+cd infra/step_functions/
+
+# First, get output values from previous stacks
+export JOBS_TABLE=$(aws cloudformation describe-stacks \
+  --stack-name ${ENVIRONMENT}-assessmax-dynamodb \
+  --query 'Stacks[0].Outputs[?OutputKey==`JobsTableName`].OutputValue' \
+  --output text)
+
+export SCORING_QUEUE_URL=$(aws cloudformation describe-stacks \
+  --stack-name ${ENVIRONMENT}-assessmax-sqs \
+  --query 'Stacks[0].Outputs[?OutputKey==`ScoringQueueUrl`].OutputValue' \
+  --output text)
+
+# Replace placeholders in state machine definition
+# (Or use sed/envsubst to automate this)
+
+aws stepfunctions create-state-machine \
+  --name ${ENVIRONMENT}-assessmax-nlp-pipeline \
+  --definition file://nlp_pipeline_state_machine.json \
+  --role-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/step-functions-execution-role
+
+Stack Outputs Reference
+-----------------------
+
+After deployment, retrieve stack outputs for application configuration:
+
+# S3 Buckets
+export S3_RAW_BUCKET=$(aws cloudformation describe-stacks \
+  --stack-name ${ENVIRONMENT}-assessmax-s3 \
+  --query 'Stacks[0].Outputs[?OutputKey==`RawBucketName`].OutputValue' \
+  --output text)
+
+export S3_NORMALIZED_BUCKET=$(aws cloudformation describe-stacks \
+  --stack-name ${ENVIRONMENT}-assessmax-s3 \
+  --query 'Stacks[0].Outputs[?OutputKey==`NormalizedBucketName`].OutputValue' \
+  --output text)
+
+export S3_OUTPUTS_BUCKET=$(aws cloudformation describe-stacks \
+  --stack-name ${ENVIRONMENT}-assessmax-s3 \
+  --query 'Stacks[0].Outputs[?OutputKey==`OutputsBucketName`].OutputValue' \
+  --output text)
+
+# DynamoDB Tables
+export DYNAMODB_JOBS_TABLE=$(aws cloudformation describe-stacks \
+  --stack-name ${ENVIRONMENT}-assessmax-dynamodb \
+  --query 'Stacks[0].Outputs[?OutputKey==`JobsTableName`].OutputValue' \
+  --output text)
+
+export DYNAMODB_ARTIFACTS_TABLE=$(aws cloudformation describe-stacks \
+  --stack-name ${ENVIRONMENT}-assessmax-dynamodb \
+  --query 'Stacks[0].Outputs[?OutputKey==`ArtifactsTableName`].OutputValue' \
+  --output text)
+
+# SQS Queues
+export SCORING_QUEUE_URL=$(aws cloudformation describe-stacks \
+  --stack-name ${ENVIRONMENT}-assessmax-sqs \
+  --query 'Stacks[0].Outputs[?OutputKey==`ScoringQueueUrl`].OutputValue' \
+  --output text)
+
+Verification Steps
+------------------
+
+## Verify S3 Versioning
+
+aws s3api get-bucket-versioning --bucket ${S3_RAW_BUCKET}
+# Should return: { "Status": "Enabled" }
+
+## Verify S3 Encryption
+
+aws s3api get-bucket-encryption --bucket ${S3_RAW_BUCKET}
+# Should show KMS encryption
+
+## Verify DynamoDB Tables
+
+aws dynamodb describe-table --table-name ${DYNAMODB_JOBS_TABLE}
+aws dynamodb describe-table --table-name ${DYNAMODB_ARTIFACTS_TABLE}
+
+## Verify SQS Queues
+
+aws sqs get-queue-attributes \
+  --queue-url ${SCORING_QUEUE_URL} \
+  --attribute-names All
+
+Cleanup / Teardown
+------------------
+
+To remove all infrastructure (CAUTION: This deletes all data):
+
+# Delete in reverse order
+aws stepfunctions delete-state-machine \
+  --state-machine-arn <state-machine-arn>
+
+aws lambda delete-function --function-name ${ENVIRONMENT}-assessmax-scoring
+aws lambda delete-function --function-name ${ENVIRONMENT}-assessmax-normalization
+
+aws cloudformation delete-stack --stack-name ${ENVIRONMENT}-assessmax-sqs
+aws cloudformation delete-stack --stack-name ${ENVIRONMENT}-assessmax-dynamodb
+
+# Empty S3 buckets first (CloudFormation can't delete non-empty buckets)
+aws s3 rm s3://${S3_RAW_BUCKET} --recursive
+aws s3 rm s3://${S3_NORMALIZED_BUCKET} --recursive
+aws s3 rm s3://${S3_OUTPUTS_BUCKET} --recursive
+
+aws cloudformation delete-stack --stack-name ${ENVIRONMENT}-assessmax-s3
+
+Monitoring Setup
+----------------
+
+After deployment, set up CloudWatch alarms:
+
+1. DynamoDB throttling alarms
+2. S3 bucket size alarms
+3. Lambda error rate alarms
+4. SQS DLQ message count alarms
+5. Step Functions execution failure alarms
+
+Cost Estimation
+---------------
+
+Typical monthly costs for dev environment:
+- S3 (100GB, IA): ~$12
+- DynamoDB (PAY_PER_REQUEST, light use): ~$10
+- Lambda (1000 executions/day): ~$20
+- SQS (1M messages/month): ~$1
+- Step Functions (1000 executions/month): ~$25
+- KMS: ~$1
+- Data Transfer: ~$5
+
+Total: ~$75/month for dev environment
+
+Production costs will scale with usage.
+
+Security Checklist
+------------------
+
+- [ ] All S3 buckets have versioning enabled
+- [ ] All S3 buckets use KMS encryption
+- [ ] All S3 buckets block public access
+- [ ] All S3 buckets require HTTPS transport
+- [ ] DynamoDB tables have point-in-time recovery enabled
+- [ ] DynamoDB tables use encryption at rest
+- [ ] SQS queues have DLQs configured
+- [ ] IAM roles follow least privilege principle
+- [ ] CloudWatch logging enabled for all services
+- [ ] CloudWatch alarms configured
+- [ ] VPC endpoints configured for S3/DynamoDB (production)
+- [ ] Resource tagging applied consistently
+
+Troubleshooting
+---------------
+
+### Stack creation failed
+- Check CloudFormation events for error messages
+- Verify IAM permissions
+- Ensure account limits not exceeded
+
+### Lambda deployment failed
+- Verify IAM execution role exists
+- Check Lambda package size limits
+- Ensure dependencies are compatible
+
+### S3 bucket already exists
+- Bucket names must be globally unique
+- Try adding account ID suffix
+- Check if bucket was created in another region
+
+Support Resources
+-----------------
+
+- AWS CloudFormation Documentation: https://docs.aws.amazon.com/cloudformation/
+- AWS Lambda Best Practices: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
+- AWS S3 Security Best Practices: https://docs.aws.amazon.com/AmazonS3/latest/userguide/security-best-practices.html

@@ -1,0 +1,330 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudWatch Log Groups and Audit Logging Configuration for AssessMax
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name
+
+  RetentionInDays:
+    Type: Number
+    Default: 90
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+    Description: CloudWatch Logs retention period in days
+
+Resources:
+  # KMS Key for Log Encryption
+  LogEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub KMS key for CloudWatch Logs encryption - ${Environment}
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: '*'
+          - Sid: Allow CloudWatch Logs
+            Effect: Allow
+            Principal:
+              Service: !Sub logs.${AWS::Region}.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:CreateGrant
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              ArnLike:
+                kms:EncryptionContext:aws:logs:arn: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  LogEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub alias/${Environment}-assessmax-logs
+      TargetKeyId: !Ref LogEncryptionKey
+
+  # API Access Logs
+  APIAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/assessmax/${Environment}/api/access
+      RetentionInDays: !Ref RetentionInDays
+      KmsKeyId: !GetAtt LogEncryptionKey.Arn
+
+  # API Audit Logs
+  APIAuditLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/assessmax/${Environment}/api/audit
+      RetentionInDays: 365  # Keep audit logs longer
+      KmsKeyId: !GetAtt LogEncryptionKey.Arn
+
+  # Authentication Logs
+  AuthLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/assessmax/${Environment}/auth
+      RetentionInDays: 365  # Keep auth logs longer for security
+      KmsKeyId: !GetAtt LogEncryptionKey.Arn
+
+  # Application Logs
+  AppLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/assessmax/${Environment}/app
+      RetentionInDays: !Ref RetentionInDays
+      KmsKeyId: !GetAtt LogEncryptionKey.Arn
+
+  # Lambda Function Logs
+  LambdaNormalizationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${Environment}-assessmax-normalization
+      RetentionInDays: !Ref RetentionInDays
+      KmsKeyId: !GetAtt LogEncryptionKey.Arn
+
+  LambdaScoringLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${Environment}-assessmax-scoring
+      RetentionInDays: !Ref RetentionInDays
+      KmsKeyId: !GetAtt LogEncryptionKey.Arn
+
+  # Step Functions Logs
+  StepFunctionsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/stepfunctions/${Environment}-assessmax-nlp-pipeline
+      RetentionInDays: !Ref RetentionInDays
+      KmsKeyId: !GetAtt LogEncryptionKey.Arn
+
+  # RDS Audit Logs (exported from RDS)
+  RDSAuditLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/rds/assessmax/${Environment}/audit
+      RetentionInDays: 365  # Keep database audit logs longer
+      KmsKeyId: !GetAtt LogEncryptionKey.Arn
+
+  # Security Events Log Group
+  SecurityLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/assessmax/${Environment}/security
+      RetentionInDays: 365  # Keep security logs longer
+      KmsKeyId: !GetAtt LogEncryptionKey.Arn
+
+  # Metric Filters and Alarms
+
+  # Failed Authentication Attempts
+  FailedAuthMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '[timestamp, request_id, event_type="FAILED_AUTH", ...]'
+      LogGroupName: !Ref AuthLogGroup
+      MetricTransformations:
+        - MetricName: FailedAuthAttempts
+          MetricNamespace: !Sub AssessMax/${Environment}
+          MetricValue: '1'
+          DefaultValue: 0
+          Unit: Count
+
+  FailedAuthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${Environment}-assessmax-failed-auth-attempts
+      AlarmDescription: Alert when failed authentication attempts exceed threshold
+      MetricName: FailedAuthAttempts
+      Namespace: !Sub AssessMax/${Environment}
+      Statistic: Sum
+      Period: 300  # 5 minutes
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  # API Errors
+  APIErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '[timestamp, request_id, level="ERROR", ...]'
+      LogGroupName: !Ref APIAccessLogGroup
+      MetricTransformations:
+        - MetricName: APIErrors
+          MetricNamespace: !Sub AssessMax/${Environment}
+          MetricValue: '1'
+          DefaultValue: 0
+          Unit: Count
+
+  APIErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${Environment}-assessmax-api-errors
+      AlarmDescription: Alert when API error rate exceeds threshold
+      MetricName: APIErrors
+      Namespace: !Sub AssessMax/${Environment}
+      Statistic: Sum
+      Period: 300  # 5 minutes
+      EvaluationPeriods: 2
+      Threshold: 50
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  # Unauthorized Access Attempts
+  UnauthorizedAccessMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '[timestamp, request_id, status_code=401 || status_code=403, ...]'
+      LogGroupName: !Ref APIAccessLogGroup
+      MetricTransformations:
+        - MetricName: UnauthorizedAccess
+          MetricNamespace: !Sub AssessMax/${Environment}
+          MetricValue: '1'
+          DefaultValue: 0
+          Unit: Count
+
+  UnauthorizedAccessAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${Environment}-assessmax-unauthorized-access
+      AlarmDescription: Alert when unauthorized access attempts exceed threshold
+      MetricName: UnauthorizedAccess
+      Namespace: !Sub AssessMax/${Environment}
+      Statistic: Sum
+      Period: 300  # 5 minutes
+      EvaluationPeriods: 1
+      Threshold: 20
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  # Data Access Audit Trail
+  DataAccessMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '[timestamp, request_id, event_type="DATA_ACCESS", user_id, resource_type, resource_id, action, ...]'
+      LogGroupName: !Ref APIAuditLogGroup
+      MetricTransformations:
+        - MetricName: DataAccessCount
+          MetricNamespace: !Sub AssessMax/${Environment}
+          MetricValue: '1'
+          DefaultValue: 0
+          Unit: Count
+
+  # PII Access Tracking
+  PIIAccessMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '[timestamp, request_id, event_type="PII_ACCESS", user_id, student_id, ...]'
+      LogGroupName: !Ref APIAuditLogGroup
+      MetricTransformations:
+        - MetricName: PIIAccessCount
+          MetricNamespace: !Sub AssessMax/${Environment}
+          MetricValue: '1'
+          DefaultValue: 0
+          Unit: Count
+
+  # CloudWatch Dashboard
+  MonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub ${Environment}-assessmax-monitoring
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AssessMax/${Environment}", "FailedAuthAttempts", {"stat": "Sum"}],
+                  [".", "UnauthorizedAccess", {"stat": "Sum"}],
+                  [".", "APIErrors", {"stat": "Sum"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Security Events",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AssessMax/${Environment}", "DataAccessCount", {"stat": "Sum"}],
+                  [".", "PIIAccessCount", {"stat": "Sum"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Data Access Audit"
+              }
+            }
+          ]
+        }
+
+Outputs:
+  LogEncryptionKeyId:
+    Description: KMS Key ID for Log Encryption
+    Value: !Ref LogEncryptionKey
+    Export:
+      Name: !Sub ${Environment}-LogEncryptionKeyId
+
+  LogEncryptionKeyArn:
+    Description: KMS Key ARN for Log Encryption
+    Value: !GetAtt LogEncryptionKey.Arn
+    Export:
+      Name: !Sub ${Environment}-LogEncryptionKeyArn
+
+  APIAccessLogGroupName:
+    Description: API Access Log Group Name
+    Value: !Ref APIAccessLogGroup
+    Export:
+      Name: !Sub ${Environment}-APIAccessLogGroupName
+
+  APIAuditLogGroupName:
+    Description: API Audit Log Group Name
+    Value: !Ref APIAuditLogGroup
+    Export:
+      Name: !Sub ${Environment}-APIAuditLogGroupName
+
+  AuthLogGroupName:
+    Description: Authentication Log Group Name
+    Value: !Ref AuthLogGroup
+    Export:
+      Name: !Sub ${Environment}-AuthLogGroupName
+
+  RDSAuditLogGroupName:
+    Description: RDS Audit Log Group Name
+    Value: !Ref RDSAuditLogGroup
+    Export:
+      Name: !Sub ${Environment}-RDSAuditLogGroupName
+
+  SecurityLogGroupName:
+    Description: Security Events Log Group Name
+    Value: !Ref SecurityLogGroup
+    Export:
+      Name: !Sub ${Environment}-SecurityLogGroupName
+
+  MonitoringDashboardURL:
+    Description: CloudWatch Monitoring Dashboard URL
+    Value: !Sub https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${MonitoringDashboard}
+    Export:
+      Name: !Sub ${Environment}-MonitoringDashboardURL

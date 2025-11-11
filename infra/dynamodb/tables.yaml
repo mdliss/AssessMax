@@ -1,0 +1,154 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: DynamoDB Tables for Job Metadata and Artifacts Tracking
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name
+
+Resources:
+  # Jobs Table - Track processing job status and metadata
+  JobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${Environment}-assessmax-jobs
+      BillingMode: PAY_PER_REQUEST  # On-demand pricing
+      AttributeDefinitions:
+        - AttributeName: job_id
+          AttributeType: S
+        - AttributeName: class_id
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: N
+        - AttributeName: status
+          AttributeType: S
+      KeySchema:
+        - AttributeName: job_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        # Query jobs by class and creation time
+        - IndexName: ClassIdCreatedAtIndex
+          KeySchema:
+            - AttributeName: class_id
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        # Query jobs by status
+        - IndexName: StatusIndex
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        Enabled: true
+        AttributeName: ttl  # Set TTL for cleanup of old jobs
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES  # Enable streams for monitoring
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: JobMetadataTracking
+
+  # Artifacts Table - Track uploaded files and metadata
+  ArtifactsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${Environment}-assessmax-artifacts
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: artifact_id
+          AttributeType: S
+        - AttributeName: job_id
+          AttributeType: S
+        - AttributeName: s3_key
+          AttributeType: S
+        - AttributeName: uploaded_at
+          AttributeType: N
+      KeySchema:
+        - AttributeName: artifact_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        # Query artifacts by job
+        - IndexName: JobIdIndex
+          KeySchema:
+            - AttributeName: job_id
+              KeyType: HASH
+            - AttributeName: uploaded_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        # Query artifacts by S3 key (for deduplication)
+        - IndexName: S3KeyIndex
+          KeySchema:
+            - AttributeName: s3_key
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        Enabled: true
+        AttributeName: ttl  # Set TTL for temp artifacts
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: ArtifactMetadataTracking
+
+Outputs:
+  JobsTableName:
+    Description: Jobs DynamoDB Table Name
+    Value: !Ref JobsTable
+    Export:
+      Name: !Sub ${Environment}-JobsTableName
+
+  JobsTableArn:
+    Description: Jobs DynamoDB Table ARN
+    Value: !GetAtt JobsTable.Arn
+    Export:
+      Name: !Sub ${Environment}-JobsTableArn
+
+  JobsTableStreamArn:
+    Description: Jobs DynamoDB Table Stream ARN
+    Value: !GetAtt JobsTable.StreamArn
+    Export:
+      Name: !Sub ${Environment}-JobsTableStreamArn
+
+  ArtifactsTableName:
+    Description: Artifacts DynamoDB Table Name
+    Value: !Ref ArtifactsTable
+    Export:
+      Name: !Sub ${Environment}-ArtifactsTableName
+
+  ArtifactsTableArn:
+    Description: Artifacts DynamoDB Table ARN
+    Value: !GetAtt ArtifactsTable.Arn
+    Export:
+      Name: !Sub ${Environment}-ArtifactsTableArn
+
+  ArtifactsTableStreamArn:
+    Description: Artifacts DynamoDB Table Stream ARN
+    Value: !GetAtt ArtifactsTable.StreamArn
+    Export:
+      Name: !Sub ${Environment}-ArtifactsTableStreamArn

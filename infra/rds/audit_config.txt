@@ -1,0 +1,286 @@
+RDS Audit Logging Configuration for AssessMax
+==============================================
+
+Overview
+--------
+This document describes the audit logging configuration for RDS PostgreSQL
+to ensure FERPA/PPRA compliance and security monitoring.
+
+RDS PostgreSQL Audit Logging Setup
+-----------------------------------
+
+## 1. Enable PostgreSQL Audit Extension (pgAudit)
+
+# Connect to RDS instance
+psql -h <rds-endpoint> -U postgres -d assessmax_db
+
+# Create the extension
+CREATE EXTENSION IF NOT EXISTS pgaudit;
+
+# Verify installation
+SELECT * FROM pg_extension WHERE extname = 'pgaudit';
+
+## 2. Configure Audit Logging Parameters
+
+# Modify DB Parameter Group
+aws rds modify-db-parameter-group \
+  --db-parameter-group-name assessmax-postgres-params \
+  --parameters \
+    "ParameterName=shared_preload_libraries,ParameterValue=pgaudit,ApplyMethod=pending-reboot" \
+    "ParameterName=pgaudit.log,ParameterValue='all',ApplyMethod=immediate" \
+    "ParameterName=pgaudit.log_catalog,ParameterValue=off,ApplyMethod=immediate" \
+    "ParameterName=pgaudit.log_parameter,ParameterValue=on,ApplyMethod=immediate" \
+    "ParameterName=pgaudit.log_relation,ParameterValue=on,ApplyMethod=immediate" \
+    "ParameterName=pgaudit.log_statement_once,ParameterValue=off,ApplyMethod=immediate" \
+    "ParameterName=pgaudit.role,ParameterValue='rds_pgaudit',ApplyMethod=immediate" \
+    "ParameterName=log_connections,ParameterValue=1,ApplyMethod=immediate" \
+    "ParameterName=log_disconnections,ParameterValue=1,ApplyMethod=immediate" \
+    "ParameterName=log_duration,ParameterValue=1,ApplyMethod=immediate" \
+    "ParameterName=log_hostname,ParameterValue=1,ApplyMethod=immediate" \
+    "ParameterName=log_line_prefix,ParameterValue='%t:%r:%u@%d:[%p]:',ApplyMethod=immediate" \
+    "ParameterName=log_statement,ParameterValue='all',ApplyMethod=immediate"
+
+# Reboot instance to apply changes requiring reboot
+aws rds reboot-db-instance --db-instance-identifier assessmax-db-dev
+
+## 3. Create Audit Role
+
+psql -h <rds-endpoint> -U postgres -d assessmax_db
+
+-- Create audit role
+CREATE ROLE rds_pgaudit;
+
+-- Grant privileges to audit role for tables requiring audit
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO rds_pgaudit;
+GRANT USAGE ON SCHEMA public TO rds_pgaudit;
+
+-- Configure what to audit
+ALTER DATABASE assessmax_db SET pgaudit.role = 'rds_pgaudit';
+
+## 4. Export Logs to CloudWatch
+
+# Enable log exports when creating/modifying DB instance
+aws rds modify-db-instance \
+  --db-instance-identifier assessmax-db-dev \
+  --cloudwatch-logs-export-configuration \
+    EnableLogTypes=postgresql \
+  --apply-immediately
+
+## 5. Configure Log Retention
+
+aws logs put-retention-policy \
+  --log-group-name /aws/rds/instance/assessmax-db-dev/postgresql \
+  --retention-in-days 365
+
+Audit Events to Track
+----------------------
+
+1. Authentication Events:
+   - User login attempts (successful and failed)
+   - Session establishment and termination
+   - Role changes
+
+2. Data Access Events:
+   - SELECT queries on sensitive tables (students, assessments, evidence)
+   - Data export operations
+   - PII access (student names, emails)
+
+3. Data Modification Events:
+   - INSERT, UPDATE, DELETE operations
+   - Schema changes (DDL)
+   - Permission changes
+
+4. Administrative Events:
+   - User creation/deletion
+   - Role assignments
+   - Configuration changes
+
+Sensitive Tables Requiring Audit
+---------------------------------
+
+students:
+  - student_id
+  - name
+  - email
+  - class_id
+
+assessments:
+  - assessment_id
+  - student_id
+  - all skill scores
+
+evidence:
+  - evidence_id
+  - assessment_id
+  - span_text (may contain PII)
+
+class_aggregates:
+  - class_id
+  - aggregated metrics
+
+Sample Audit Queries
+--------------------
+
+## Check recent data access
+SELECT
+  session_user,
+  command_tag,
+  object_type,
+  object_name,
+  log_time
+FROM pgaudit_log
+WHERE object_name IN ('students', 'assessments', 'evidence')
+  AND log_time > NOW() - INTERVAL '24 hours'
+ORDER BY log_time DESC;
+
+## Find failed login attempts
+SELECT
+  log_time,
+  user_name,
+  database_name,
+  remote_host,
+  application_name
+FROM pg_stat_activity_log
+WHERE state = 'failed'
+  AND log_time > NOW() - INTERVAL '1 hour';
+
+## Audit PII access
+SELECT
+  log_time,
+  session_user,
+  command_tag,
+  statement
+FROM pgaudit_log
+WHERE object_name = 'students'
+  AND command_tag IN ('SELECT', 'UPDATE')
+  AND statement LIKE '%name%' OR statement LIKE '%email%'
+ORDER BY log_time DESC
+LIMIT 100;
+
+CloudWatch Insights Queries
+----------------------------
+
+## Failed connection attempts
+fields @timestamp, @message
+| filter @message like /FATAL/
+| filter @message like /authentication/
+| sort @timestamp desc
+| limit 100
+
+## Long running queries
+fields @timestamp, duration, user, database, query
+| filter duration > 5000
+| sort duration desc
+| limit 50
+
+## Data modification audit
+fields @timestamp, session_user, command_tag, object_name
+| filter command_tag in ["INSERT", "UPDATE", "DELETE"]
+| filter object_name in ["students", "assessments", "evidence"]
+| sort @timestamp desc
+
+Compliance Requirements
+-----------------------
+
+FERPA Requirements:
+- Log all access to student education records
+- Track who accessed what data and when
+- Maintain logs for minimum 3 years
+- Provide audit trail for compliance reviews
+
+PPRA Requirements:
+- Log access to survey and assessment data
+- Track consent and authorization
+- Audit data sharing and exports
+- Document data retention and deletion
+
+Implementation Checklist
+------------------------
+
+- [x] Enable pgAudit extension
+- [x] Configure audit parameters
+- [x] Create audit role
+- [x] Enable CloudWatch Logs export
+- [x] Set log retention to 365 days
+- [x] Configure audit for sensitive tables
+- [x] Set up CloudWatch Insights queries
+- [ ] Test audit logging functionality
+- [ ] Document audit procedures
+- [ ] Train staff on compliance requirements
+- [ ] Schedule regular audit reviews
+- [ ] Set up automated compliance reports
+
+Monitoring and Alerts
+---------------------
+
+Set up CloudWatch alarms for:
+
+1. Failed authentication attempts > 10 in 5 minutes
+2. Unauthorized data access attempts
+3. Mass data exports
+4. Schema modifications in production
+5. Unusual query patterns
+6. Long-running queries > 30 seconds
+
+Alert recipients:
+- Security team
+- Database administrators
+- Compliance officer
+
+Regular Audit Tasks
+-------------------
+
+Daily:
+- Review failed authentication attempts
+- Check for unauthorized access attempts
+- Monitor data export activities
+
+Weekly:
+- Review access patterns
+- Analyze query performance
+- Check for anomalies
+
+Monthly:
+- Generate compliance reports
+- Review user permissions
+- Audit data retention compliance
+
+Quarterly:
+- Comprehensive security audit
+- Update audit procedures
+- Review and update alerting thresholds
+- Compliance certification
+
+Incident Response
+-----------------
+
+If audit logs indicate suspicious activity:
+
+1. Immediate Actions:
+   - Document the incident
+   - Preserve relevant logs
+   - Notify security team
+
+2. Investigation:
+   - Review full audit trail
+   - Identify affected data
+   - Determine scope of access
+
+3. Remediation:
+   - Revoke compromised credentials
+   - Implement additional controls
+   - Notify affected parties if required
+
+4. Post-Incident:
+   - Update security procedures
+   - Improve monitoring
+   - Conduct lessons learned review
+
+Contact Information
+-------------------
+
+Security Team: security@assessmax.com
+Compliance Officer: compliance@assessmax.com
+Database Admin: dba@assessmax.com
+
+Emergency Contact: +1-555-SECURITY

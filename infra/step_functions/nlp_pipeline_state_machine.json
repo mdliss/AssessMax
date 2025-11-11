@@ -1,0 +1,285 @@
+{
+  "Comment": "NLP Pipeline State Machine for batch processing transcripts and artifacts",
+  "StartAt": "ValidateInput",
+  "States": {
+    "ValidateInput": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${ValidateLambdaArn}",
+        "Payload": {
+          "job_id.$": "$.job_id",
+          "input_key.$": "$.input_key",
+          "format.$": "$.format",
+          "class_id.$": "$.class_id",
+          "date.$": "$.date",
+          "metadata.$": "$.metadata"
+        }
+      },
+      "ResultPath": "$.validation",
+      "ResultSelector": {
+        "is_valid.$": "$.Payload.is_valid",
+        "errors.$": "$.Payload.errors"
+      },
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "HandleFailure"
+        }
+      ],
+      "Next": "CheckValidation"
+    },
+    "CheckValidation": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.validation.is_valid",
+          "BooleanEquals": true,
+          "Next": "NormalizeTranscript"
+        }
+      ],
+      "Default": "HandleFailure"
+    },
+    "NormalizeTranscript": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${NormalizationLambdaArn}",
+        "Payload": {
+          "job_id.$": "$.job_id",
+          "input_key.$": "$.input_key",
+          "format.$": "$.format",
+          "class_id.$": "$.class_id",
+          "date.$": "$.date",
+          "metadata.$": "$.metadata"
+        }
+      },
+      "ResultPath": "$.normalization",
+      "ResultSelector": {
+        "normalized_key.$": "$.Payload.normalized_key",
+        "line_count.$": "$.Payload.line_count",
+        "warnings.$": "$.Payload.warnings"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "HandleFailure"
+        }
+      ],
+      "Next": "ScoreTranscript"
+    },
+    "ScoreTranscript": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
+      "Parameters": {
+        "QueueUrl": "${ScoringQueueUrl}",
+        "MessageBody": {
+          "job_id.$": "$.job_id",
+          "normalized_key.$": "$.normalization.normalized_key",
+          "class_id.$": "$.class_id",
+          "date.$": "$.date",
+          "line_count.$": "$.normalization.line_count",
+          "metadata.$": "$.metadata",
+          "taskToken.$": "$$.Task.Token"
+        }
+      },
+      "ResultPath": "$.scoring",
+      "TimeoutSeconds": 900,
+      "HeartbeatSeconds": 60,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.Timeout"
+          ],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "HandleFailure"
+        }
+      ],
+      "Next": "AggregateResults"
+    },
+    "AggregateResults": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${AggregationLambdaArn}",
+        "Payload": {
+          "job_id.$": "$.job_id",
+          "class_id.$": "$.class_id",
+          "date.$": "$.date",
+          "scores_key.$": "$.scoring.scores_key",
+          "student_count.$": "$.scoring.student_count"
+        }
+      },
+      "ResultPath": "$.aggregation",
+      "ResultSelector": {
+        "aggregate_key.$": "$.Payload.aggregate_key",
+        "summary.$": "$.Payload.summary"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "HandleFailure"
+        }
+      ],
+      "Next": "PublishResults"
+    },
+    "PublishResults": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${PublishLambdaArn}",
+        "Payload": {
+          "job_id.$": "$.job_id",
+          "class_id.$": "$.class_id",
+          "date.$": "$.date",
+          "aggregate_key.$": "$.aggregation.aggregate_key"
+        }
+      },
+      "ResultPath": "$.publish",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "PartialSuccess"
+        }
+      ],
+      "Next": "JobSucceeded"
+    },
+    "JobSucceeded": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${JobsTableName}",
+        "Key": {
+          "job_id": {
+            "S.$": "$.job_id"
+          }
+        },
+        "UpdateExpression": "SET #status = :status, ended_at = :ended_at",
+        "ExpressionAttributeNames": {
+          "#status": "status"
+        },
+        "ExpressionAttributeValues": {
+          ":status": {
+            "S": "succeeded"
+          },
+          ":ended_at": {
+            "S.$": "$$.State.EnteredTime"
+          }
+        }
+      },
+      "ResultPath": null,
+      "End": true
+    },
+    "PartialSuccess": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${JobsTableName}",
+        "Key": {
+          "job_id": {
+            "S.$": "$.job_id"
+          }
+        },
+        "UpdateExpression": "SET #status = :status, ended_at = :ended_at, error_message = :error",
+        "ExpressionAttributeNames": {
+          "#status": "status"
+        },
+        "ExpressionAttributeValues": {
+          ":status": {
+            "S": "succeeded"
+          },
+          ":ended_at": {
+            "S.$": "$$.State.EnteredTime"
+          },
+          ":error": {
+            "S": "Publishing failed but scoring completed"
+          }
+        }
+      },
+      "ResultPath": null,
+      "End": true
+    },
+    "HandleFailure": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${JobsTableName}",
+        "Key": {
+          "job_id": {
+            "S.$": "$.job_id"
+          }
+        },
+        "UpdateExpression": "SET #status = :status, ended_at = :ended_at, error_message = :error",
+        "ExpressionAttributeNames": {
+          "#status": "status"
+        },
+        "ExpressionAttributeValues": {
+          ":status": {
+            "S": "failed"
+          },
+          ":ended_at": {
+            "S.$": "$$.State.EnteredTime"
+          },
+          ":error": {
+            "S.$": "States.Format('{}', $.error.Cause)"
+          }
+        }
+      },
+      "ResultPath": null,
+      "Next": "JobFailed"
+    },
+    "JobFailed": {
+      "Type": "Fail",
+      "Error": "JobProcessingFailed",
+      "Cause": "Job failed during processing. Check DynamoDB for details."
+    }
+  }
+}

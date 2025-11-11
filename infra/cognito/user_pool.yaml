@@ -1,0 +1,332 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS Cognito User Pool for AssessMax Authentication with MFA and Role-Based Access
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name
+
+  AdminEmail:
+    Type: String
+    Description: Email address for the initial admin user
+    Default: admin@example.com
+
+Resources:
+  # Cognito User Pool
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub ${Environment}-assessmax-users
+
+      # Sign-in options
+      UsernameAttributes:
+        - email
+      UsernameConfiguration:
+        CaseSensitive: false
+
+      # Password policy
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          TemporaryPasswordValidityDays: 7
+
+      # MFA Configuration
+      MfaConfiguration: OPTIONAL
+      EnabledMfas:
+        - SOFTWARE_TOKEN_MFA
+
+      # Account recovery
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+
+      # Email configuration
+      EmailConfiguration:
+        EmailSendingAccount: COGNITO_DEFAULT
+
+      # User attributes
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: false
+        - Name: name
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+        - Name: given_name
+          AttributeDataType: String
+          Required: false
+          Mutable: true
+        - Name: family_name
+          AttributeDataType: String
+          Required: false
+          Mutable: true
+        - Name: custom:role
+          AttributeDataType: String
+          Required: false
+          Mutable: true
+        - Name: custom:organization
+          AttributeDataType: String
+          Required: false
+          Mutable: true
+
+      # Auto-verification
+      AutoVerifiedAttributes:
+        - email
+
+      # Advanced security
+      UserPoolAddOns:
+        AdvancedSecurityMode: ENFORCED
+
+      # Lifecycle
+      UserAttributeUpdateSettings:
+        AttributesRequireVerificationBeforeUpdate:
+          - email
+
+      # Lambda triggers (for custom auth flows - optional)
+      # LambdaConfig:
+      #   PreAuthentication: !GetAtt PreAuthLambda.Arn
+      #   PostAuthentication: !GetAtt PostAuthLambda.Arn
+
+      UserPoolTags:
+        Environment: !Ref Environment
+        Purpose: Authentication
+
+  # User Pool Domain for Hosted UI
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub ${Environment}-assessmax-${AWS::AccountId}
+      UserPoolId: !Ref UserPool
+
+  # App Client for Dashboard
+  DashboardAppClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub ${Environment}-assessmax-dashboard
+      UserPoolId: !Ref UserPool
+
+      # OAuth configuration
+      AllowedOAuthFlows:
+        - code
+        - implicit
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile
+      AllowedOAuthFlowsUserPoolClient: true
+
+      # Callback and logout URLs
+      CallbackURLs:
+        - http://localhost:8501
+        - !Sub https://${Environment}-dashboard.assessmax.com
+      LogoutURLs:
+        - http://localhost:8501
+        - !Sub https://${Environment}-dashboard.assessmax.com
+
+      # Security
+      GenerateSecret: false  # Set to true for backend services
+      PreventUserExistenceErrors: ENABLED
+
+      # Token validity
+      IdTokenValidity: 60  # minutes
+      AccessTokenValidity: 60  # minutes
+      RefreshTokenValidity: 30  # days
+      TokenValidityUnits:
+        IdToken: minutes
+        AccessToken: minutes
+        RefreshToken: days
+
+      # Attributes
+      ReadAttributes:
+        - email
+        - email_verified
+        - name
+        - given_name
+        - family_name
+        - custom:role
+        - custom:organization
+      WriteAttributes:
+        - name
+        - given_name
+        - family_name
+
+      # Enable token revocation
+      EnableTokenRevocation: true
+      EnablePropagateAdditionalUserContextData: true
+
+  # App Client for API
+  APIAppClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub ${Environment}-assessmax-api
+      UserPoolId: !Ref UserPool
+      GenerateSecret: true
+
+      # OAuth configuration
+      AllowedOAuthFlows:
+        - client_credentials
+      AllowedOAuthScopes:
+        - !Sub ${Environment}-assessmax-api/read
+        - !Sub ${Environment}-assessmax-api/write
+      AllowedOAuthFlowsUserPoolClient: true
+
+      # Token validity
+      AccessTokenValidity: 60
+      TokenValidityUnits:
+        AccessToken: minutes
+
+      PreventUserExistenceErrors: ENABLED
+      EnableTokenRevocation: true
+
+  # Resource Server for API scopes
+  APIResourceServer:
+    Type: AWS::Cognito::UserPoolResourceServer
+    Properties:
+      UserPoolId: !Ref UserPool
+      Identifier: !Sub ${Environment}-assessmax-api
+      Name: AssessMax API
+      Scopes:
+        - ScopeName: read
+          ScopeDescription: Read access to API
+        - ScopeName: write
+          ScopeDescription: Write access to API
+
+  # User Groups
+  EducatorGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: educator
+      UserPoolId: !Ref UserPool
+      Description: Educators who can view and manage student assessments
+      Precedence: 2
+
+  AdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: admin
+      UserPoolId: !Ref UserPool
+      Description: Administrators with full system access
+      Precedence: 1
+
+  ReadOnlyGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: read_only
+      UserPoolId: !Ref UserPool
+      Description: Read-only access to assessments
+      Precedence: 3
+
+  # Identity Pool for AWS resource access (optional)
+  IdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: !Sub ${Environment}_assessmax_identity
+      AllowUnauthenticatedIdentities: false
+      CognitoIdentityProviders:
+        - ClientId: !Ref DashboardAppClient
+          ProviderName: !GetAtt UserPool.ProviderName
+
+  # IAM Roles for authenticated users
+  CognitoAuthenticatedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Environment}-assessmax-cognito-authenticated
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                cognito-identity.amazonaws.com:aud: !Ref IdentityPool
+              ForAnyValue:StringLike:
+                cognito-identity.amazonaws.com:amr: authenticated
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+      Policies:
+        - PolicyName: AssessMaxUserPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - !Sub arn:aws:s3:::${Environment}-assessmax-outputs-*/*
+
+  # Attach roles to identity pool
+  IdentityPoolRoleAttachment:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref IdentityPool
+      Roles:
+        authenticated: !GetAtt CognitoAuthenticatedRole.Arn
+
+Outputs:
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref UserPool
+    Export:
+      Name: !Sub ${Environment}-UserPoolId
+
+  UserPoolArn:
+    Description: Cognito User Pool ARN
+    Value: !GetAtt UserPool.Arn
+    Export:
+      Name: !Sub ${Environment}-UserPoolArn
+
+  UserPoolProviderName:
+    Description: Cognito User Pool Provider Name
+    Value: !GetAtt UserPool.ProviderName
+    Export:
+      Name: !Sub ${Environment}-UserPoolProviderName
+
+  UserPoolProviderURL:
+    Description: Cognito User Pool Provider URL
+    Value: !GetAtt UserPool.ProviderURL
+    Export:
+      Name: !Sub ${Environment}-UserPoolProviderURL
+
+  DashboardAppClientId:
+    Description: Dashboard App Client ID
+    Value: !Ref DashboardAppClient
+    Export:
+      Name: !Sub ${Environment}-DashboardAppClientId
+
+  APIAppClientId:
+    Description: API App Client ID
+    Value: !Ref APIAppClient
+    Export:
+      Name: !Sub ${Environment}-APIAppClientId
+
+  UserPoolDomain:
+    Description: Cognito User Pool Domain
+    Value: !Sub https://${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com
+    Export:
+      Name: !Sub ${Environment}-UserPoolDomain
+
+  JWKSUrl:
+    Description: JWKS URL for token verification
+    Value: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}/.well-known/jwks.json
+    Export:
+      Name: !Sub ${Environment}-JWKSUrl
+
+  IdentityPoolId:
+    Description: Cognito Identity Pool ID
+    Value: !Ref IdentityPool
+    Export:
+      Name: !Sub ${Environment}-IdentityPoolId

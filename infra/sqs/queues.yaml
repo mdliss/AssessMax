@@ -1,0 +1,156 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: SQS Queues for NLP Pipeline Batch Processing
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name
+
+Resources:
+  # Dead Letter Queue for failed messages
+  NLPPipelineDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${Environment}-nlp-pipeline-dlq
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: DeadLetterQueue
+
+  # Normalization Queue (not needed if using Step Functions)
+  # Kept for potential direct invocation
+  NormalizationQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${Environment}-normalization-queue
+      VisibilityTimeout: 300  # 5 minutes
+      MessageRetentionPeriod: 345600  # 4 days
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt NLPPipelineDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: TranscriptNormalization
+
+  # Scoring Queue - receives from normalization Lambda
+  ScoringQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${Environment}-scoring-queue
+      VisibilityTimeout: 900  # 15 minutes (scoring can take time)
+      MessageRetentionPeriod: 345600  # 4 days
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt NLPPipelineDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: NLPScoring
+
+  # Aggregation Queue - receives from scoring Lambda
+  AggregationQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${Environment}-aggregation-queue
+      VisibilityTimeout: 180  # 3 minutes
+      MessageRetentionPeriod: 345600  # 4 days
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt NLPPipelineDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: ResultAggregation
+
+  # Queue Policy for Lambda access
+  ScoringQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref ScoringQueue
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+            Resource: !GetAtt ScoringQueue.Arn
+
+  AggregationQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref AggregationQueue
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+            Resource: !GetAtt AggregationQueue.Arn
+
+Outputs:
+  NLPPipelineDLQArn:
+    Description: Dead Letter Queue ARN
+    Value: !GetAtt NLPPipelineDLQ.Arn
+    Export:
+      Name: !Sub ${Environment}-NLPPipelineDLQArn
+
+  NLPPipelineDLQUrl:
+    Description: Dead Letter Queue URL
+    Value: !Ref NLPPipelineDLQ
+    Export:
+      Name: !Sub ${Environment}-NLPPipelineDLQUrl
+
+  NormalizationQueueArn:
+    Description: Normalization Queue ARN
+    Value: !GetAtt NormalizationQueue.Arn
+    Export:
+      Name: !Sub ${Environment}-NormalizationQueueArn
+
+  NormalizationQueueUrl:
+    Description: Normalization Queue URL
+    Value: !Ref NormalizationQueue
+    Export:
+      Name: !Sub ${Environment}-NormalizationQueueUrl
+
+  ScoringQueueArn:
+    Description: Scoring Queue ARN
+    Value: !GetAtt ScoringQueue.Arn
+    Export:
+      Name: !Sub ${Environment}-ScoringQueueArn
+
+  ScoringQueueUrl:
+    Description: Scoring Queue URL
+    Value: !Ref ScoringQueue
+    Export:
+      Name: !Sub ${Environment}-ScoringQueueUrl
+
+  AggregationQueueArn:
+    Description: Aggregation Queue ARN
+    Value: !GetAtt AggregationQueue.Arn
+    Export:
+      Name: !Sub ${Environment}-AggregationQueueArn
+
+  AggregationQueueUrl:
+    Description: Aggregation Queue URL
+    Value: !Ref AggregationQueue
+    Export:
+      Name: !Sub ${Environment}-AggregationQueueUrl
