@@ -75,7 +75,7 @@ def show_student_detail() -> None:
     try:
         student_uuid = parse_uuid(student_id_input)
     except ValueError as exc:
-        st.error(f"❌ Invalid Student ID: {exc}")
+        st.error(f"Invalid Student ID: {exc}")
         return
 
     student_id_str = str(student_uuid)
@@ -296,7 +296,7 @@ def show_assessment_history(history: dict[str, Any], student_id: str, student_la
     with col1:
         csv_data = export_to_csv(ledger_rows)
         st.download_button(
-            label="📄 CSV Export",
+            label="CSV Export",
             data=csv_data,
             file_name=f"student_{student_id}_history.csv",
             mime="text/csv",
@@ -309,7 +309,7 @@ def show_assessment_history(history: dict[str, Any], student_id: str, student_la
             student_name=student_label,
         )
         st.download_button(
-            label="📑 PDF Snapshot",
+            label="PDF Snapshot",
             data=pdf_data,
             file_name=f"student_{student_id}_history.pdf",
             mime="application/pdf",

@@ -146,28 +146,26 @@ def _render_metric_card(metric: MetricDatum) -> None:
             delta_icon = "▼"
             delta_class = "pulse-badge danger"
 
-    caption_html = (
-        f"<span class='pulse-subheading'>{metric.caption}</span>"
-        if metric.caption
-        else ""
-    )
-    delta_html = (
-        f"<span class='{delta_class}'>{delta_icon} {metric.delta}</span>"
-        if metric.delta
-        else ""
-    )
+    # Build HTML parts list to avoid empty line issues
+    html_parts = ['<div class="pulse-card">']
 
-    st.markdown(
-        f"""
-        <div class="pulse-card">
-            {caption_html}
-            <div class="pulse-metric-value">{metric.value}</div>
-            <div class="pulse-pill">{metric.label}</div>
-            <div class="pulse-badges">{delta_html}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    if metric.caption:
+        html_parts.append(f"<span class='pulse-subheading'>{metric.caption}</span>")
+
+    html_parts.append(f'<div class="pulse-metric-value">{metric.value}</div>')
+    html_parts.append(f'<div class="pulse-pill">{metric.label}</div>')
+
+    if metric.delta:
+        delta_html = f"<span class='{delta_class}'>{delta_icon} {metric.delta}</span>"
+        html_parts.append(f'<div class="pulse-badges">{delta_html}</div>')
+    else:
+        html_parts.append('<div class="pulse-badges"></div>')
+
+    html_parts.append('</div>')
+
+    html = '\n'.join(html_parts)
+
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def render_notification(message: str, label: str = "Status") -> None:

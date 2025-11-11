@@ -51,7 +51,10 @@
       "Bash(then python3.11 -m venv venv)",
       "Bash(fi)",
       "Bash(/tmp/dashboard_install.log)",
-      "Bash(python3.11 -m venv:*)"
+      "Bash(python3.11 -m venv:*)",
+      "Bash(aws dynamodb list-tables:*)",
+      "Bash(aws ecr describe-repositories:*)",
+      "Bash(aws cognito-idp:*)"
     ],
     "deny": [],
     "ask": []

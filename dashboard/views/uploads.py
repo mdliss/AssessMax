@@ -52,7 +52,7 @@ def show_uploads() -> None:
 
     st.markdown("<div class='pulse-divider'></div>", unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["📤 Upload Files", "⚙️ Job Status", "📊 Upload History"])
+    tab1, tab2, tab3 = st.tabs(["Upload Files", "Job Status", "Upload History"])
 
     with tab1:
         _show_upload_section()
@@ -117,9 +117,9 @@ def _render_transcript_form() -> None:
         submit = st.form_submit_button("Initiate Transcript Pipeline", use_container_width=True)
         if submit:
             if not uploaded_file or not class_id:
-                st.error("❌ Provide both a transcript file and class identifier.")
+                st.error("Provide both a transcript file and class identifier.")
             else:
-                st.success("✅ Transcript queued for ingestion.")
+                st.success("Transcript queued for ingestion.")
                 render_notification(
                     "Presigned upload request submitted. Normalization Lambda will process the file within ~2 minutes.",
                     label="Pipeline",
@@ -159,9 +159,9 @@ def _render_artifact_form() -> None:
         submit = st.form_submit_button("Upload Artifact", use_container_width=True)
         if submit:
             if not uploaded_file or not student_id:
-                st.error("❌ Provide both a file and a student identifier.")
+                st.error("Provide both a file and a student identifier.")
             else:
-                st.success("✅ Artifact routed to enrichment queue.")
+                st.success("Artifact routed to enrichment queue.")
                 render_notification(
                     "Artifact metadata stored. Scoring Lambda will link evidence spans after transcript processing.",
                     label="Pipeline",

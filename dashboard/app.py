@@ -9,7 +9,7 @@ from config import settings
 # Set page config FIRST before any other Streamlit commands
 st.set_page_config(
     page_title=settings.dashboard_title,
-    page_icon="📊",
+    page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -54,10 +54,10 @@ def show_login_page() -> None:
 
             if submit:
                 if AuthManager.login(username, password):
-                    st.success("✅ Login successful!")
+                    st.success("Login successful!")
                     st.rerun()
                 else:
-                    st.error("❌ Invalid credentials. Please try again.")
+                    st.error("Invalid credentials. Please try again.")
 
         st.info(
             """

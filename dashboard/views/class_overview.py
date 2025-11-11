@@ -88,8 +88,8 @@ def show_class_overview() -> None:
         show_student_summaries(students, class_id)
 
     except Exception as exc:  # pragma: no cover - UI path
-        st.error(f"❌ Error loading class data: {exc}")
-        st.info("💡 Ensure the backend API is reachable or rely on mock data.")
+        st.error(f"Error loading class data: {exc}")
+        st.info("Ensure the backend API is reachable or rely on mock data.")
 
 
 @st.cache_data(ttl=300)
@@ -212,7 +212,7 @@ def show_student_summaries(students: list[dict[str, Any]], class_id: str) -> Non
     with col1:
         csv_data = export_to_csv(table_data)
         st.download_button(
-            label="📄 CSV Export",
+            label="CSV Export",
             data=csv_data,
             file_name=f"class_{class_id}_overview.csv",
             mime="text/csv",
@@ -225,7 +225,7 @@ def show_student_summaries(students: list[dict[str, Any]], class_id: str) -> Non
             class_id=class_id,
         )
         st.download_button(
-            label="📑 PDF Snapshot",
+            label="PDF Snapshot",
             data=pdf_data,
             file_name=f"class_{class_id}_overview.pdf",
             mime="application/pdf",
