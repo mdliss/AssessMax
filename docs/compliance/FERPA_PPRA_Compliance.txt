@@ -1,0 +1,516 @@
+AssessMax FERPA and PPRA Compliance Documentation
+=================================================
+
+Document Version: 1.0
+Last Updated: 2024-01-15
+Next Review Date: 2024-07-15
+
+Executive Summary
+-----------------
+
+This document outlines AssessMax's compliance with the Family Educational Rights
+and Privacy Act (FERPA) and the Protection of Pupil Rights Amendment (PPRA),
+ensuring proper handling of student education records and assessment data.
+
+Table of Contents
+-----------------
+
+1. Legal Framework
+2. Data Classification
+3. Access Controls
+4. Consent and Authorization
+5. Data Retention and Deletion
+6. Security Measures
+7. Audit and Logging
+8. Breach Response
+9. Training Requirements
+10. Compliance Checklist
+
+1. Legal Framework
+------------------
+
+### FERPA (20 U.S.C. § 1232g; 34 CFR Part 99)
+
+FERPA protects the privacy of student education records. Key requirements:
+
+- Schools must obtain written consent before disclosing PII from education records
+- Parents/eligible students have right to inspect and review education records
+- Parents/eligible students have right to request amendments to records
+- Schools must maintain records of disclosures
+
+### PPRA (20 U.S.C. § 1232h; 34 CFR Part 98)
+
+PPRA protects student privacy in surveys and assessments. Key requirements:
+
+- Prior written consent required for certain surveys
+- Parents have right to inspect surveys and instructional materials
+- Opportunity to opt out of certain activities
+- Protection of personal information collected from students
+
+2. Data Classification
+----------------------
+
+### Education Records (FERPA Protected)
+
+AssessMax collects and stores the following education records:
+
+**Tier 1 - Highly Sensitive:**
+- Student name
+- Student ID
+- Email address
+- Class enrollment
+- Individual assessment scores
+- Skill progression data
+- Evidence text (may contain student statements)
+
+**Tier 2 - Sensitive:**
+- Class aggregated data
+- Teacher observations
+- Assessment timestamps
+- Model version information
+
+**Tier 3 - Non-Sensitive:**
+- Anonymized research data
+- System logs (no PII)
+- Usage statistics
+
+### Personal Information (PPRA Protected)
+
+- Student responses in transcripts
+- Behavioral observations
+- Social-emotional skill assessments
+- Communication patterns
+
+3. Access Controls
+------------------
+
+### Role-Based Access Control (RBAC)
+
+**Administrator Role:**
+- Full system access
+- User management
+- Configuration changes
+- Audit log access
+
+**Educator Role:**
+- View students in assigned classes
+- View and generate assessments
+- Access class aggregated data
+- Export reports for assigned classes
+
+**Read-Only Role:**
+- View class aggregated data only
+- No access to individual student records
+- No export capabilities
+
+### Technical Controls
+
+1. AWS Cognito authentication with MFA
+2. Session tokens expire after 60 minutes
+3. Automatic logout after 30 minutes of inactivity
+4. IP-based access restrictions (configurable)
+5. Failed login attempt monitoring
+6. Principle of least privilege for all roles
+
+### Access Logging
+
+All access to education records is logged with:
+- User ID and role
+- Timestamp
+- Action performed
+- Record(s) accessed
+- IP address
+- Session ID
+
+4. Consent and Authorization
+-----------------------------
+
+### Parental Consent Requirements
+
+Prior to using AssessMax, schools must:
+
+1. Provide written notice to parents about:
+   - Type of data collected
+   - Purpose of collection
+   - How data will be used
+   - Third parties with access
+   - Data retention period
+   - Security measures
+
+2. Obtain written consent for:
+   - Collection of student data
+   - Assessment participation
+   - Data retention beyond academic year
+
+### Consent Management
+
+- Consent forms stored securely
+- Consent status tracked per student
+- Annual consent renewal required
+- Easy opt-out process available
+- Consent revocation honored within 5 business days
+
+### Data Sharing Agreements
+
+Third-party access requires:
+- Written data sharing agreement
+- FERPA compliance attestation
+- Security standards certification
+- Annual compliance review
+- Immediate termination clause
+
+5. Data Retention and Deletion
+-------------------------------
+
+### Retention Periods
+
+**Active Records:**
+- Student assessment data: Retained while student is enrolled
+- Historical data: 2 years after last enrollment
+- Audit logs: 3 years minimum
+
+**Deleted Records:**
+- Soft delete initially (30-day recovery period)
+- Hard delete after 30 days
+- Backup purging after 90 days
+
+### Data Deletion Procedures
+
+**Upon Request:**
+1. Verify identity of requester
+2. Confirm authorization to request deletion
+3. Process deletion within 10 business days
+4. Provide confirmation to requester
+5. Document deletion in audit log
+
+**Automated Deletion:**
+- Students inactive for 2 years: flagged for review
+- Reviewed records deleted if no retention requirement
+- Anonymized data retained for research (if consented)
+
+### Right to Request Deletion
+
+Parents/eligible students may request:
+- Full account deletion
+- Specific record deletion
+- Data export before deletion
+- Confirmation of deletion
+
+6. Security Measures
+--------------------
+
+### Data Encryption
+
+**In Transit:**
+- TLS 1.3 for all API communications
+- HTTPS only (no HTTP)
+- Certificate pinning for mobile apps
+- VPN required for admin access
+
+**At Rest:**
+- AES-256 encryption for S3 buckets
+- KMS encryption for all data stores
+- Encrypted database backups
+- Encrypted log files
+
+### Infrastructure Security
+
+1. **Network Security:**
+   - VPC isolation
+   - Private subnets for databases
+   - Security groups with least privilege
+   - WAF for API protection
+   - DDoS protection via CloudFront
+
+2. **Access Security:**
+   - Multi-factor authentication required
+   - Regular password rotation
+   - Strong password requirements (12+ chars, complexity)
+   - Session management and timeout
+   - IP whitelist for admin access
+
+3. **Database Security:**
+   - Encrypted connections only
+   - Parameterized queries (SQL injection prevention)
+   - Database user least privilege
+   - Regular security patches
+   - Automated backups with encryption
+
+4. **Application Security:**
+   - Input validation and sanitization
+   - Output encoding
+   - CSRF protection
+   - XSS prevention
+   - Regular security scans
+
+### Third-Party Security
+
+All third-party services must:
+- Be FERPA compliant
+- Undergo security assessment
+- Sign data processing agreement
+- Provide SOC 2 Type II certification
+- Submit to annual audit
+
+7. Audit and Logging
+---------------------
+
+### Comprehensive Audit Trail
+
+All the following are logged:
+
+**Authentication Events:**
+- Login attempts (success/failure)
+- Logout events
+- Session timeouts
+- MFA verifications
+- Password changes
+
+**Data Access Events:**
+- Record views
+- Searches performed
+- Filter criteria used
+- Export requests
+- API calls
+
+**Data Modification Events:**
+- Record creation
+- Record updates
+- Record deletion
+- Bulk operations
+- Import operations
+
+**Administrative Events:**
+- User creation/deletion
+- Role assignments
+- Permission changes
+- Configuration updates
+- System maintenance
+
+### Log Retention
+
+- Security logs: 3 years
+- Access logs: 3 years
+- Application logs: 1 year
+- Debug logs: 90 days
+
+### Regular Audits
+
+**Internal Audits:**
+- Monthly: Access pattern review
+- Quarterly: Security posture assessment
+- Annually: Full compliance audit
+
+**External Audits:**
+- Annual third-party security assessment
+- Biannual penetration testing
+- Compliance certification review
+
+8. Breach Response
+------------------
+
+### Incident Response Plan
+
+**Detection:**
+- 24/7 monitoring of security events
+- Automated alerting for suspicious activity
+- Regular log review
+- User-reported incidents
+
+**Containment:**
+1. Isolate affected systems (within 1 hour)
+2. Preserve evidence
+3. Assess scope of breach
+4. Document all actions
+
+**Investigation:**
+1. Identify breach cause
+2. Determine data accessed/exfiltrated
+3. Identify affected individuals
+4. Document timeline
+
+**Notification:**
+
+If breach affects >100 individuals:
+- School district: Within 24 hours
+- Department of Education: Within 72 hours
+- Affected individuals: Without unreasonable delay
+- Media (if required): As per state law
+
+**Remediation:**
+1. Patch vulnerabilities
+2. Update security controls
+3. Reset compromised credentials
+4. Enhance monitoring
+5. Conduct lessons learned
+
+### Breach Prevention
+
+- Regular security training
+- Penetration testing
+- Vulnerability scanning
+- Security patch management
+- Incident response drills
+
+9. Training Requirements
+------------------------
+
+### All Personnel
+
+**Initial Training (before system access):**
+- FERPA basics and requirements
+- PPRA basics and requirements
+- Data classification
+- Access controls
+- Incident reporting
+- Acceptable use policy
+
+**Annual Refresher:**
+- Compliance updates
+- New threats and risks
+- Lessons learned
+- Policy changes
+- Case studies
+
+### Role-Specific Training
+
+**Administrators:**
+- Advanced FERPA/PPRA requirements
+- Incident response procedures
+- Audit log review
+- User management best practices
+
+**Educators:**
+- Student privacy principles
+- Appropriate data use
+- Consent requirements
+- Sharing restrictions
+
+**Developers:**
+- Secure coding practices
+- Data protection requirements
+- Privacy by design
+- Security testing
+
+### Training Documentation
+
+- Attendance records maintained
+- Completion certificates issued
+- Quiz scores recorded
+- Refresher schedules tracked
+
+10. Compliance Checklist
+-------------------------
+
+### Implementation Checklist
+
+**Infrastructure:**
+- [x] Encryption at rest enabled
+- [x] Encryption in transit enabled
+- [x] Access controls implemented
+- [x] Audit logging enabled
+- [x] Backup encryption enabled
+- [x] Network segmentation completed
+- [x] MFA enabled for all users
+- [x] Password policy enforced
+
+**Policies and Procedures:**
+- [x] Data retention policy documented
+- [x] Deletion procedures defined
+- [x] Breach response plan created
+- [x] Consent management process established
+- [x] User training program developed
+- [x] Acceptable use policy published
+- [x] Data sharing agreement template created
+
+**Operational:**
+- [ ] Initial staff training completed
+- [ ] Parental consent forms distributed
+- [ ] Data sharing agreements executed
+- [ ] Audit schedule established
+- [ ] Incident response team designated
+- [ ] Compliance officer assigned
+
+**Ongoing:**
+- [ ] Monthly audit log reviews
+- [ ] Quarterly access reviews
+- [ ] Annual compliance audit
+- [ ] Annual training refresher
+- [ ] Annual policy review
+- [ ] Quarterly security assessments
+
+### Annual Compliance Report
+
+Required elements:
+1. Summary of data collected
+2. Consent rates
+3. Access statistics
+4. Security incidents
+5. Audit findings
+6. Training completion rates
+7. Policy updates
+8. Recommendations
+
+Appendices
+----------
+
+### Appendix A: Definitions
+
+**Education Records:** Records directly related to a student maintained by an
+educational agency or institution or by a party acting for the agency or institution.
+
+**Directory Information:** Information contained in an education record that
+would not generally be considered harmful or an invasion of privacy if disclosed.
+
+**PII (Personally Identifiable Information):** Information that can be used to
+distinguish or trace an individual's identity.
+
+**Eligible Student:** A student who has reached 18 years of age or is attending
+a postsecondary institution.
+
+### Appendix B: Consent Form Template
+
+[See separate consent form template document]
+
+### Appendix C: Data Sharing Agreement Template
+
+[See separate DSA template document]
+
+### Appendix D: Incident Response Contact List
+
+Security Team: security@assessmax.com
+Compliance Officer: compliance@assessmax.com
+Legal Counsel: legal@assessmax.com
+PR/Communications: pr@assessmax.com
+
+Emergency Hotline: +1-555-SECURITY
+
+### Appendix E: References
+
+- FERPA Regulations: 34 CFR Part 99
+- PPRA Regulations: 34 CFR Part 98
+- COPPA Regulations: 16 CFR Part 312
+- NIST Cybersecurity Framework
+- ISO 27001/27002 Standards
+
+Document Control
+----------------
+
+This document is reviewed and updated:
+- Annually (minimum)
+- After significant system changes
+- Following security incidents
+- When regulations change
+
+Document Approval:
+
+Name: _________________________
+Title: _________________________
+Signature: _____________________
+Date: __________________________
+
+Compliance Officer Approval:
+
+Name: _________________________
+Signature: _____________________
+Date: __________________________

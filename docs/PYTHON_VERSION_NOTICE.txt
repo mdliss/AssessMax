@@ -1,0 +1,78 @@
+AssessMax Python Version Compatibility Notice
+=============================================
+
+Date: 2024-11-10
+Status: IMPORTANT
+
+Issue Summary
+-------------
+The AssessMax backend requires Python 3.11 or 3.12 for full functionality.
+Python 3.14 (currently in use) causes build failures for NLP dependencies.
+
+Affected Dependencies
+--------------------
+- spacy >= 3.7.0
+- transformers >= 4.38.0
+- nltk >= 3.8.0
+
+These packages do not have pre-built wheels for Python 3.14 and fail to
+build from source due to numpy compilation issues.
+
+Test Results
+-----------
+✅ PASSED: File ingestion validators (18/18 tests)
+   - JSONL format validation
+   - CSV format validation
+   - TXT format validation
+   - File format detection
+
+❌ BLOCKED: Tests requiring NLP dependencies
+   - test_evidence_extraction.py
+   - test_main.py (imports NLP modules)
+   - test_auth.py (imports main which imports NLP)
+   - test_assessments_api.py (imports main)
+   - test_ingest_api.py (imports main)
+   - test_jobs_api.py (imports main)
+
+Recommended Actions
+------------------
+
+1. For Development:
+   - Use Python 3.11 or 3.12
+   - Create a new virtual environment:
+     ```bash
+     python3.11 -m venv venv
+     source venv/bin/activate
+     pip install -e ".[dev]"
+     ```
+
+2. For Production:
+   - Update Dockerfile to use python:3.11-slim or python:3.12-slim
+   - CI/CD pipeline already specifies python 3.11 (correct)
+
+3. Update pyproject.toml:
+   - Current: requires-python = ">=3.11"
+   - Recommend: requires-python = ">=3.11,<3.14"
+
+Current Workaround
+-----------------
+Core API functionality (auth, database, file validation) can be tested
+without NLP packages. However, the NLP scoring pipeline is a critical
+component and must be tested before production deployment.
+
+Next Steps
+----------
+1. Create new Python 3.11 virtual environment
+2. Install all dependencies including NLP packages
+3. Run full test suite
+4. Validate NLP pipeline functionality
+
+References
+----------
+- pyproject.toml: /backend/pyproject.toml
+- CI/CD config: /.github/workflows/backend-ci.yml (correctly uses Python 3.11)
+- Test suite: /backend/tests/
+
+Contact
+-------
+For questions, refer to the backend README or project documentation.
