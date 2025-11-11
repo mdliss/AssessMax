@@ -104,33 +104,33 @@ def show_main_app() -> None:
         page = st.radio(
             "Navigation",
             [
-                "🏫 Class Overview",
-                "👤 Student Detail",
-                "📈 Trends",
-                "📁 Uploads & Jobs",
+                "Class Overview",
+                "Student Detail",
+                "Trends",
+                "Uploads & Jobs",
             ],
             label_visibility="visible",
         )
 
         st.divider()
 
-        if st.button("🚪 Logout", use_container_width=True):
+        if st.button("Logout", use_container_width=True):
             AuthManager.logout()
 
     # Page routing
-    if page == "🏫 Class Overview":
+    if page == "Class Overview":
         from views.class_overview import show_class_overview
 
         show_class_overview()
-    elif page == "👤 Student Detail":
+    elif page == "Student Detail":
         from views.student_detail import show_student_detail
 
         show_student_detail()
-    elif page == "📈 Trends":
+    elif page == "Trends":
         from views.trends import show_trends
 
         show_trends()
-    elif page == "📁 Uploads & Jobs":
+    elif page == "Uploads & Jobs":
         from views.uploads import show_uploads
 
         show_uploads()
