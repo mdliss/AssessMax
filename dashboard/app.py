@@ -119,19 +119,19 @@ def show_main_app() -> None:
 
     # Page routing
     if page == "🏫 Class Overview":
-        from pages.class_overview import show_class_overview
+        from views.class_overview import show_class_overview
 
         show_class_overview()
     elif page == "👤 Student Detail":
-        from pages.student_detail import show_student_detail
+        from views.student_detail import show_student_detail
 
         show_student_detail()
     elif page == "📈 Trends":
-        from pages.trends import show_trends
+        from views.trends import show_trends
 
         show_trends()
     elif page == "📁 Uploads & Jobs":
-        from pages.uploads import show_uploads
+        from views.uploads import show_uploads
 
         show_uploads()
 
