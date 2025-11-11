@@ -66,6 +66,87 @@ a:hover {
   transform: translateY(-1px);
 }
 
+.stApp {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.main {
+  flex: 1 0 auto;
+}
+
+.pulse-hero {
+  padding: 2.4rem 0 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.pulse-hero::after {
+  content: '';
+  position: absolute;
+  inset: -120px;
+  background: radial-gradient(circle at top right, rgba(20, 184, 166, 0.18), transparent 65%);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.pulse-hero h1 {
+  font-size: 3rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 0.6rem;
+}
+
+.pulse-hero p {
+  max-width: 640px;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.8;
+}
+
+.pulse-hero-badges {
+  margin-top: 1.2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  position: relative;
+  z-index: 1;
+}
+
+.pulse-section {
+  margin: 1.6rem 0;
+  padding: 1.8rem 1.6rem;
+  border-radius: 26px;
+  background: linear-gradient(180deg, rgba(26, 26, 26, 0.75), rgba(12, 12, 12, 0.95));
+  border: 1px solid rgba(38, 38, 38, 0.8);
+  box-shadow: var(--shadow-sm);
+}
+
+.pulse-section h3 {
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+  font-size: 0.85rem;
+  margin-bottom: 1.2rem;
+  color: var(--text-muted);
+}
+
+.pulse-form {
+  background: rgba(17, 17, 17, 0.92);
+  border-radius: 24px;
+  border: 1px solid rgba(38, 38, 38, 0.75);
+  padding: 1.6rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.pulse-form .stForm {
+  gap: 1rem;
+}
+
+.pulse-form .stFormSubmitButton > button {
+  margin-top: 0.6rem;
+}
+
 /* Sidebar */
 .stSidebar {
   background: rgba(20, 20, 20, 0.78) !important;
@@ -160,6 +241,47 @@ select:focus,
   transform: translateY(-1px);
 }
 
+.stSlider > div > div > div {
+  background: rgba(31, 31, 31, 0.85);
+  border-radius: 16px;
+  border: 1px solid rgba(38, 38, 38, 0.65);
+}
+
+.stSlider [role='slider'] {
+  background: linear-gradient(120deg, rgba(20, 184, 166, 0.9), rgba(13, 148, 136, 0.9)) !important;
+  box-shadow: 0 0 0 6px rgba(20, 184, 166, 0.15) !important;
+}
+
+.stTabs [role='tablist'] {
+  border-bottom: 1px solid rgba(38, 38, 38, 0.7);
+  gap: 0.6rem;
+}
+
+.stTabs [role='tab'] {
+  background: rgba(26, 26, 26, 0.9);
+  border-radius: 16px 16px 0 0;
+  border: 1px solid rgba(38, 38, 38, 0.7);
+  padding: 0.75rem 1.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.stTabs [role='tab'][aria-selected='true'] {
+  background: linear-gradient(120deg, rgba(20, 184, 166, 0.2), rgba(26, 26, 26, 0.95));
+  border-color: rgba(20, 184, 166, 0.4);
+  color: var(--accent);
+}
+
+.stTabs [role='tabpanel'] {
+  border: 1px solid rgba(38, 38, 38, 0.7);
+  border-radius: 0 24px 24px 24px;
+  padding: 1.6rem;
+  background: rgba(12, 12, 12, 0.92);
+  margin-top: -1px;
+}
+
 .stDateInput {
   background: transparent !important;
 }
@@ -202,6 +324,10 @@ select:focus,
   font-size: 0.7rem;
 }
 
+.pulse-card + .pulse-card {
+  margin-top: 1rem;
+}
+
 .pulse-metric-value {
   font-size: 2.8rem;
   font-weight: 700;
@@ -230,6 +356,11 @@ select:focus,
   letter-spacing: 0.16em;
   font-size: 0.65rem;
   font-weight: 600;
+}
+
+.pulse-badge.accent {
+  background: rgba(20, 184, 166, 0.16);
+  color: var(--accent);
 }
 
 .pulse-badge.neutral {
@@ -416,6 +547,21 @@ select:focus,
   gap: 0.6rem;
 }
 
+.pulse-empty-state {
+  text-align: center;
+  padding: 3rem 2rem;
+  border-radius: 28px;
+  border: 1px dashed rgba(38, 38, 38, 0.8);
+  background: rgba(15, 15, 15, 0.85);
+  color: var(--text-secondary);
+}
+
+.pulse-empty-state strong {
+  display: block;
+  margin-bottom: 0.6rem;
+  color: var(--foreground);
+}
+
 .stAlert {
   border-radius: 20px;
   background: rgba(20, 20, 20, 0.9);
@@ -470,4 +616,17 @@ footer {
 .dataframe tbody td {
   background: rgba(22, 22, 22, 0.88) !important;
   color: var(--text-secondary) !important;
+}
+
+[data-testid='stFileUploader'] section {
+  border-radius: 18px;
+  border: 1px dashed rgba(38, 38, 38, 0.85);
+  background: rgba(15, 15, 15, 0.85);
+  color: var(--text-secondary);
+  transition: border-color 200ms ease, color 200ms ease;
+}
+
+[data-testid='stFileUploader'] section:hover {
+  border-color: rgba(20, 184, 166, 0.6);
+  color: var(--accent);
 }

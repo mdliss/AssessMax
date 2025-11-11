@@ -10,7 +10,15 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from components import MetricDatum, render_logo_badge, render_metric_grid, render_notification
+from components import (
+    HeroBadge,
+    MetricDatum,
+    render_empty_state,
+    render_metric_grid,
+    render_notification,
+    render_page_header,
+    render_section_header,
+)
 from utils import create_trend_chart, format_skill_name
 
 SKILLS = ["empathy", "adaptability", "collaboration", "communication", "self_regulation"]
@@ -19,30 +27,31 @@ SKILLS = ["empathy", "adaptability", "collaboration", "communication", "self_reg
 def show_trends() -> None:
     """Display trend analysis with multi-week rollups."""
 
-    render_logo_badge("Trend Horizon", "Detect growth momentum across cohorts and learners")
-
-    col1, col2, col3 = st.columns([2, 1, 1], gap="large")
-    with col1:
-        time_range = st.select_slider(
-            "Window",
-            options=[4, 8, 12],
-            value=8,
-            format_func=lambda x: f"{x} week window",
-            help="Select the time horizon for the trend analysis.",
-        )
-    with col2:
-        view_type = st.radio(
-            "View Mode",
-            ["Class", "Student"],
-            index=0,
-            help="Toggle between class-wide and individual insights.",
-        )
-    with col3:
-        smoothing = st.selectbox(
-            "Smoothing",
-            ["Simple Moving Average", "Exponential"],
-            help="Choose the smoothing algorithm for trend lines.",
-        )
+    with st.container():
+        st.markdown("<div class='pulse-form drop-in'>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([2, 1, 1], gap="large")
+        with col1:
+            time_range = st.select_slider(
+                "Window",
+                options=[4, 8, 12],
+                value=8,
+                format_func=lambda x: f"{x} week window",
+                help="Select the time horizon for the trend analysis.",
+            )
+        with col2:
+            view_type = st.radio(
+                "View Mode",
+                ["Class", "Student"],
+                index=0,
+                help="Toggle between class-wide and individual insights.",
+            )
+        with col3:
+            smoothing = st.selectbox(
+                "Smoothing",
+                ["Simple Moving Average", "Exponential"],
+                help="Choose the smoothing algorithm for trend lines.",
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("<div class='pulse-divider'></div>", unsafe_allow_html=True)
 
@@ -53,14 +62,17 @@ def show_trends() -> None:
 
 
 def _render_class_trends(time_range: int, smoothing: str) -> None:
-    class_id = st.text_input(
-        "Class Identifier",
-        value="MS-7A",
-        help="Enter the cohort identifier to visualize. Defaults to synthetic class data.",
-    )
+    with st.container():
+        st.markdown("<div class='pulse-form drop-in'>", unsafe_allow_html=True)
+        class_id = st.text_input(
+            "Class Identifier",
+            value="MS-7A",
+            help="Enter the cohort identifier to visualize. Defaults to synthetic class data.",
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
 
     if not class_id:
-        st.info("ℹ️ Provide a class identifier to build the timeline.")
+        render_empty_state("Awaiting Class Identifier", "Provide a class ID to build the timeline.")
         return
 
     df = _generate_trend_dataframe(time_range, seed=hash(class_id) % 1_000_000)
@@ -70,6 +82,16 @@ def _render_class_trends(time_range: int, smoothing: str) -> None:
     )
 
     cohort_metrics = _calculate_cohort_metrics(df)
+    render_page_header(
+        "Trend Horizon",
+        f"Cohort momentum for {class_id}.",
+        badges=[
+            HeroBadge(label="Window", value=f"{time_range} weeks", tone="accent"),
+            HeroBadge(label="View", value="Class", tone="neutral"),
+            HeroBadge(label="Smoothing", value=smoothing, tone="neutral"),
+        ],
+    )
+    render_section_header("Momentum Summary", "Window-level indicators for this class.")
     render_metric_grid(
         [
             MetricDatum("Window Span", f"{time_range} weeks", caption="Trend horizon"),
@@ -80,7 +102,7 @@ def _render_class_trends(time_range: int, smoothing: str) -> None:
         columns=4,
     )
 
-    st.markdown("#### Multi-skill Overlay")
+    render_section_header("Multi-skill Overlay", "Track each skill's contribution over time.")
     overlay_fig = px.line(
         df.melt(id_vars="assessed_on", value_vars=SKILLS, var_name="skill", value_name="score"),
         x="assessed_on",
@@ -101,7 +123,7 @@ def _render_class_trends(time_range: int, smoothing: str) -> None:
     )
     st.plotly_chart(overlay_fig, use_container_width=True, theme=None)
 
-    st.markdown("#### Skill Spotlight")
+    render_section_header("Skill Spotlight", "Inspect skills individually for deeper insights.")
     tabs = st.tabs([format_skill_name(skill) for skill in SKILLS])
     for tab, skill in zip(tabs, SKILLS):
         with tab:
@@ -110,14 +132,17 @@ def _render_class_trends(time_range: int, smoothing: str) -> None:
 
 
 def _render_student_trends(time_range: int, smoothing: str) -> None:
-    student_id = st.text_input(
-        "Student UUID",
-        value="550e8400-e29b-41d4-a716-446655440001",
-        help="Paste a student UUID. Defaults to a synthetic exemplar for demo mode.",
-    )
+    with st.container():
+        st.markdown("<div class='pulse-form drop-in'>", unsafe_allow_html=True)
+        student_id = st.text_input(
+            "Student UUID",
+            value="550e8400-e29b-41d4-a716-446655440001",
+            help="Paste a student UUID. Defaults to a synthetic exemplar for demo mode.",
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
 
     if not student_id:
-        st.info("ℹ️ Provide a student UUID to examine their progression.")
+        render_empty_state("Awaiting Student Identifier", "Enter a student UUID to examine their progression.")
         return
 
     df = _generate_trend_dataframe(time_range, seed=hash(student_id) % 1_000_000 + 42)
@@ -127,6 +152,17 @@ def _render_student_trends(time_range: int, smoothing: str) -> None:
     )
 
     momentum = _calculate_student_momentum(df)
+    render_page_header(
+        "Trend Horizon",
+        f"Personal momentum for learner {student_id[:8].upper()}…",
+        badges=[
+            HeroBadge(label="Window", value=f"{time_range} weeks", tone="accent"),
+            HeroBadge(label="View", value="Student", tone="neutral"),
+            HeroBadge(label="Student", value=student_id[:8].upper(), tone="neutral"),
+            HeroBadge(label="Smoothing", value=smoothing, tone="neutral"),
+        ],
+    )
+    render_section_header("Momentum Summary", "Individual trend indicators over the selected window.")
     render_metric_grid(
         [
             MetricDatum("Momentum Skill", momentum["focus_skill"], delta=f"{momentum['delta']:+.1f}", delta_variant="up"),
@@ -137,7 +173,7 @@ def _render_student_trends(time_range: int, smoothing: str) -> None:
         columns=4,
     )
 
-    st.markdown("#### Personal Trendlines")
+    render_section_header("Personal Trendlines", "Skill-by-skill trajectories for the selected learner.")
     tabs = st.tabs([format_skill_name(skill) for skill in SKILLS])
     for tab, skill in zip(tabs, SKILLS):
         with tab:

@@ -11,7 +11,15 @@ import pandas as pd
 import streamlit as st
 
 from auth import AuthManager
-from components import MetricDatum, render_logo_badge, render_metric_grid, render_notification
+from components import (
+    HeroBadge,
+    MetricDatum,
+    render_empty_state,
+    render_metric_grid,
+    render_notification,
+    render_page_header,
+    render_section_header,
+)
 
 PIPELINE_STAGES = ["queued", "normalizing", "scoring", "succeeded"]
 
@@ -19,9 +27,19 @@ PIPELINE_STAGES = ["queued", "normalizing", "scoring", "succeeded"]
 def show_uploads() -> None:
     """Display uploads and jobs management page."""
 
-    render_logo_badge("Uploads & Jobs", "Ingest transcripts, monitor batches, and track evidence pipeline")
-
     job_summary = _fetch_job_summary()
+
+    render_page_header(
+        "Uploads & Jobs",
+        "Ingest transcripts, monitor batches, and track evidence pipeline health.",
+        badges=[
+            HeroBadge(label="Jobs Today", value=str(job_summary["jobs_today"]), tone="accent"),
+            HeroBadge(label="Success Rate", value=f"{job_summary['success_rate']}%", tone="neutral"),
+            HeroBadge(label="Active Batches", value=str(job_summary["active_jobs"]), tone="neutral"),
+        ],
+    )
+
+    render_section_header("Pipeline Pulse", "Snapshot of ingestion performance over the last 24 hours.")
     render_metric_grid(
         [
             MetricDatum("Jobs Today", str(job_summary["jobs_today"]), caption="New ingestion runs"),
@@ -47,14 +65,17 @@ def show_uploads() -> None:
 
 
 def _show_upload_section() -> None:
-    st.markdown("#### Uploader")
+    render_section_header("Uploader", "Launch transcript or artifact pipelines.")
 
-    upload_type = st.radio(
-        "Upload Type",
-        ["Transcript", "Artifact"],
-        help="Select the ingestion pathway. Transcript uploads trigger normalization and scoring; artifacts supplement evidence.",
-        horizontal=True,
-    )
+    with st.container():
+        st.markdown("<div class='pulse-form drop-in'>", unsafe_allow_html=True)
+        upload_type = st.radio(
+            "Upload Type",
+            ["Transcript", "Artifact"],
+            help="Select the ingestion pathway. Transcript uploads trigger normalization and scoring; artifacts supplement evidence.",
+            horizontal=True,
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
 
     if upload_type == "Transcript":
         _render_transcript_form()
@@ -148,20 +169,23 @@ def _render_artifact_form() -> None:
 
 
 def _show_job_status_section() -> None:
-    st.markdown("#### Job Tracker")
+    render_section_header("Job Tracker", "Query ingestion jobs and monitor statuses.")
 
-    search_col, status_col = st.columns([2, 1])
-    with search_col:
-        job_id = st.text_input("Lookup Job ID", placeholder="job-uuid")
-    with status_col:
-        status_filter = st.selectbox("Status Filter", ["all"] + PIPELINE_STAGES)
+    with st.container():
+        st.markdown("<div class='pulse-form drop-in'>", unsafe_allow_html=True)
+        search_col, status_col = st.columns([2, 1])
+        with search_col:
+            job_id = st.text_input("Lookup Job ID", placeholder="job-uuid")
+        with status_col:
+            status_filter = st.selectbox("Status Filter", ["all"] + PIPELINE_STAGES)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     jobs_df = _fetch_jobs_dataframe(status_filter=status_filter if status_filter != "all" else None)
     if job_id:
         jobs_df = jobs_df[jobs_df["Job ID"].str.contains(job_id, case=False)]
 
     if jobs_df.empty:
-        st.info("No jobs match the current filters. Ingest new data to see live status updates.")
+        render_empty_state("No jobs match the current filters.", "Ingest new data to see live status updates.")
         return
 
     st.dataframe(
@@ -173,7 +197,7 @@ def _show_job_status_section() -> None:
 
 
 def _show_upload_history_section() -> None:
-    st.markdown("#### Upload History Insights")
+    render_section_header("Upload History Insights", "Understand recent ingestion cadence.")
     history_df = _generate_upload_history()
     st.bar_chart(
         history_df.set_index("Date"),

@@ -11,7 +11,15 @@ import pandas as pd
 import streamlit as st
 
 from auth import AuthManager
-from components import MetricDatum, render_logo_badge, render_metric_grid, render_notification
+from components import (
+    HeroBadge,
+    MetricDatum,
+    render_empty_state,
+    render_metric_grid,
+    render_notification,
+    render_page_header,
+    render_section_header,
+)
 from utils import (
     create_skill_chart,
     create_trend_chart,
@@ -34,24 +42,26 @@ STUDENT_BY_ID = {v: k for k, v in SAMPLE_STUDENTS.items()}
 def show_student_detail() -> None:
     """Display detailed student assessment information."""
 
-    render_logo_badge("Student Deep Dive", "Track growth arcs with evidence-first analytics")
-
     default_id = st.session_state.get("selected_student_id", SAMPLE_STUDENTS["Emma Johnson"])
-    col1, col2 = st.columns([2, 1], gap="large")
 
-    with col1:
-        student_id_input = st.text_input(
-            "Student UUID",
-            value=default_id,
-            help="Paste a Cognito-linked student UUID. Defaults to a rubric-compliant synthetic learner.",
-        )
+    with st.container():
+        st.markdown("<div class='pulse-form drop-in'>", unsafe_allow_html=True)
+        col1, col2 = st.columns([2, 1], gap="large")
 
-    with col2:
-        if st.button("Refresh Records", use_container_width=True):
-            fetch_latest_assessment.clear()  # type: ignore[attr-defined]
-            fetch_assessment_history.clear()  # type: ignore[attr-defined]
-            fetch_evidence.clear()  # type: ignore[attr-defined]
-            st.experimental_rerun()
+        with col1:
+            student_id_input = st.text_input(
+                "Student UUID",
+                value=default_id,
+                help="Paste a Cognito-linked student UUID. Defaults to a rubric-compliant synthetic learner.",
+            )
+
+        with col2:
+            if st.button("Refresh Records", use_container_width=True):
+                fetch_latest_assessment.clear()  # type: ignore[attr-defined]
+                fetch_assessment_history.clear()  # type: ignore[attr-defined]
+                fetch_evidence.clear()  # type: ignore[attr-defined]
+                st.experimental_rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.caption(
         "Quick selections: "
@@ -59,7 +69,7 @@ def show_student_detail() -> None:
     )
 
     if not student_id_input:
-        st.info("ℹ️ Provide a student identifier to render their evidence trail.")
+        render_empty_state("Awaiting Student Selection", "Enter a student UUID to stream assessments and evidence.")
         return
 
     try:
@@ -83,6 +93,33 @@ def show_student_detail() -> None:
             "Synthesized learner trajectory using rubric-aligned synthetic data.",
             label="Demo Mode",
         )
+
+    skills = latest_assessment.get("skills", [])
+    top_skill = max(skills, key=lambda s: s["score"]) if skills else None
+    avg_score = sum(skill["score"] for skill in skills) / len(skills) if skills else 0
+    hero_badges = [
+        HeroBadge(label="Student", value=student_label, tone="accent"),
+        HeroBadge(
+            label="Top Skill",
+            value=format_skill_name(top_skill["skill"]) if top_skill else "N/A",
+            tone="neutral",
+        ),
+        HeroBadge(
+            label="Average Score",
+            value=f"{avg_score:.1f}" if skills else "N/A",
+            tone="neutral",
+        ),
+        HeroBadge(
+            label="Last Assessed",
+            value=latest_assessment.get("assessed_on", "N/A"),
+            tone="neutral",
+        ),
+    ]
+    render_page_header(
+        "Student Deep Dive",
+        f"Evidence-first profile for {student_label}.",
+        badges=hero_badges,
+    )
 
     show_latest_assessment(latest_assessment, student_label)
     st.markdown("<div class='pulse-divider'></div>", unsafe_allow_html=True)
@@ -131,7 +168,7 @@ def fetch_evidence(assessment_id: str) -> dict[str, Any]:
 def show_latest_assessment(assessment: dict[str, Any], student_label: str) -> None:
     """Display latest assessment details."""
 
-    st.markdown("#### Latest Assessment Summary")
+    render_section_header("Latest Assessment", "Most recent snapshot across the five skill domains.")
 
     render_metric_grid(
         [
@@ -145,7 +182,7 @@ def show_latest_assessment(assessment: dict[str, Any], student_label: str) -> No
 
     skills = assessment.get("skills", [])
     if not skills:
-        st.info("No skill scores available")
+        render_empty_state("No skill scores available.", "Trigger the NLP pipeline to generate a fresh assessment.")
         return
 
     skill_data = {skill["skill"]: skill["score"] for skill in skills}
@@ -156,7 +193,7 @@ def show_latest_assessment(assessment: dict[str, Any], student_label: str) -> No
         st.plotly_chart(fig, use_container_width=True, theme=None)
 
     with right:
-        st.markdown("#### Skill Focus")
+        st.markdown("<div class='pulse-subheading'>Skill Focus</div>", unsafe_allow_html=True)
         for idx, skill in enumerate(skills):
             st.markdown(
                 f"""
@@ -173,10 +210,10 @@ def show_latest_assessment(assessment: dict[str, Any], student_label: str) -> No
 def show_evidence_section(evidence: dict[str, Any]) -> None:
     """Display evidence spans for the assessment."""
 
-    st.markdown("#### Evidence Highlights")
+    render_section_header("Evidence Highlights", "Ground each score with transcript and artifact citations.")
     evidence_spans = evidence.get("evidence_spans", [])
     if not evidence_spans:
-        st.info("No evidence data available")
+        render_empty_state("No evidence data available.", "Upload annotated transcripts or artifacts to populate evidence.")
         return
 
     evidence_by_skill: dict[str, list[dict[str, Any]]] = {}
@@ -208,10 +245,10 @@ def show_evidence_section(evidence: dict[str, Any]) -> None:
 def show_assessment_history(history: dict[str, Any], student_id: str, student_label: str) -> None:
     """Display assessment history and exports."""
 
-    st.markdown("#### Progression Timeline")
+    render_section_header("Progression Timeline", "Compare individual movement across review windows.")
     assessments = history.get("assessments", [])
     if not assessments:
-        st.info("Not enough data for trends")
+        render_empty_state("Not enough data for trends.", "Ingest additional transcripts to extend the timeline.")
         return
 
     trend_rows = []
@@ -234,7 +271,7 @@ def show_assessment_history(history: dict[str, Any], student_id: str, student_la
             else:
                 st.info("No data available for this skill.")
 
-    st.markdown("#### Assessment Ledger")
+    render_section_header("Assessment Ledger", "Tabular export of every captured assessment event.")
     ledger_rows = []
     for assessment in assessments:
         row = {

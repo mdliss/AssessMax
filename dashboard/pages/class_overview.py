@@ -11,37 +11,46 @@ import pandas as pd
 import streamlit as st
 
 from auth import AuthManager
-from components import MetricDatum, render_logo_badge, render_metric_grid, render_notification
+from components import (
+    HeroBadge,
+    MetricDatum,
+    render_empty_state,
+    render_metric_grid,
+    render_notification,
+    render_page_header,
+    render_section_header,
+)
 from utils import create_skill_chart, export_to_csv, export_to_pdf, format_skill_name
 
 
 def show_class_overview() -> None:
     """Display class overview with metrics and student summaries."""
 
-    render_logo_badge("Class Pulse", "Monitor cohort performance in real time")
+    with st.container():
+        st.markdown("<div class='pulse-form drop-in'>", unsafe_allow_html=True)
+        with st.form("class_filter_form"):
+            col1, col2, col3 = st.columns([2, 1, 1])
 
-    with st.form("class_filter_form"):
-        col1, col2, col3 = st.columns([2, 1, 1])
+            with col1:
+                class_id = st.text_input(
+                    "Class Identifier",
+                    value="MS-7A",
+                    placeholder="e.g., MS-7A",
+                    label_visibility="visible",
+                    help="Enter the roster identifier or cohort slug.",
+                )
 
-        with col1:
-            class_id = st.text_input(
-                "Class Identifier",
-                value="MS-7A",
-                placeholder="e.g., MS-7A",
-                label_visibility="visible",
-                help="Enter the roster identifier or cohort slug.",
-            )
+            with col2:
+                refresh = st.form_submit_button("Refresh Pulse", use_container_width=True)
 
-        with col2:
-            refresh = st.form_submit_button("Refresh Pulse", use_container_width=True)
-
-        with col3:
-            if st.form_submit_button("Clear Cache", use_container_width=True):
-                st.cache_data.clear()
-                st.experimental_rerun()
+            with col3:
+                if st.form_submit_button("Clear Cache", use_container_width=True):
+                    st.cache_data.clear()
+                    st.experimental_rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
     if not class_id:
-        st.info("ℹ️ Provide a class identifier to render analytics.")
+        render_empty_state("Awaiting Class Selection", "Provide a class identifier to render analytics.")
         return
 
     try:
@@ -60,6 +69,17 @@ def show_class_overview() -> None:
 
         metrics_block = data.get("metrics", {})
         students = data.get("students", [])
+
+        hero_badges = [
+            HeroBadge(label=f"Class {class_id}", tone="accent"),
+            HeroBadge(label="Students", value=str(metrics_block.get("student_count", 0)), tone="neutral"),
+            HeroBadge(label="Assessments", value=str(metrics_block.get("total_assessments", 0)), tone="neutral"),
+        ]
+        render_page_header(
+            "Class Pulse",
+            f"Monitor cohort performance in real time for {class_id}.",
+            badges=hero_badges,
+        )
 
         show_class_metrics(metrics_block)
         st.markdown("<div class='pulse-divider'></div>", unsafe_allow_html=True)
@@ -98,6 +118,7 @@ def show_class_metrics(metrics: dict[str, Any]) -> None:
         days = 0
         coverage = "N/A"
 
+    render_section_header("Class Metrics", "Topline signals across the roster.")
     render_metric_grid(
         [
             MetricDatum("Active Students", f"{student_count}", caption="Roster size"),
@@ -127,16 +148,17 @@ def show_class_averages(metrics: dict[str, Any]) -> None:
     class_averages = metrics.get("class_averages", {})
 
     if not class_averages:
-        st.info("No skill score data available")
+        render_empty_state("No skill score data available.", "Run an ingestion job or seed the database to populate class averages.")
         return
 
+    render_section_header("Skill Averages", "Scores normalized to 0-100 for cohort comparison.")
     left, right = st.columns([2, 1], gap="large")
     with left:
         fig = create_skill_chart(class_averages, title="Class Skill Signature")
         st.plotly_chart(fig, use_container_width=True, theme=None)
 
     with right:
-        st.markdown("#### Signal Strength")
+        st.markdown("<div class='pulse-subheading'>Signal Strength</div>", unsafe_allow_html=True)
         for skill, score in sorted(class_averages.items(), key=lambda x: -x[1]):
             st.markdown(
                 f"<div class='pulse-card drop-in'>"
@@ -152,9 +174,10 @@ def show_student_summaries(students: list[dict[str, Any]], class_id: str) -> Non
     """Display student summary table."""
 
     if not students:
-        st.info("No student data available")
+        render_empty_state("No student data available.", "Ensure synthetic data has been seeded or upload transcripts to generate assessments.")
         return
 
+    render_section_header("Student Summaries", "Drill into the roster to spot growth and focus areas.")
     table_data = []
     for student in students:
         latest = student.get("latest_assessment")
@@ -184,7 +207,7 @@ def show_student_summaries(students: list[dict[str, Any]], class_id: str) -> Non
         height=420,
     )
 
-    st.markdown("#### Export Pulse")
+    render_section_header("Exports", "Share data with grade level teams and leadership.")
     col1, col2 = st.columns(2)
     with col1:
         csv_data = export_to_csv(table_data)

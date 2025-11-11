@@ -10,6 +10,15 @@ import streamlit as st
 
 
 @dataclass(frozen=True)
+class HeroBadge:
+    """Badge descriptor for hero sections."""
+
+    label: str
+    value: str | None = None
+    tone: str = "accent"  # accent | danger | neutral
+
+
+@dataclass(frozen=True)
 class MetricDatum:
     """Data needed to render a compact metric card."""
 
@@ -34,16 +43,68 @@ def inject_theme() -> None:
     st.session_state["pulsemax_theme_loaded"] = True
 
 
-def render_logo_badge(title: str, subtitle: str | None = None) -> None:
-    """Render the PulseMax hero heading with drop-in animation."""
+def render_page_header(
+    title: str,
+    subtitle: str | None = None,
+    badges: Iterable[HeroBadge] | None = None,
+) -> None:
+    """Render a hero header with optional badges."""
 
-    _subtitle = f"<span class='pulse-subheading'>{subtitle}</span>" if subtitle else ""
+    badge_html = ""
+    if badges:
+        badge_fragments = []
+        for badge in badges:
+            tone_class = f"pulse-badge {badge.tone}"
+            badge_value = f"<strong>{badge.value}</strong>" if badge.value else ""
+            badge_fragments.append(
+                f"<span class='{tone_class}'>{badge_value} {badge.label}</span>"
+            )
+        badge_html = "<div class='pulse-hero-badges'>" + " ".join(badge_fragments) + "</div>"
+
+    subtitle_html = f"<p>{subtitle}</p>" if subtitle else ""
+    st.markdown(
+        f"""
+        <section class="pulse-hero drop-in">
+            <div class="pulse-subheading">PulseMax</div>
+            <h1>{title}</h1>
+            {subtitle_html}
+            {badge_html}
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_logo_badge(title: str, subtitle: str | None = None) -> None:
+    """Backward compatible wrapper around render_page_header."""
+
+    render_page_header(title=title, subtitle=subtitle)
+
+
+def render_section_header(title: str, description: str | None = None) -> None:
+    """Render a standardized section heading."""
+
+    description_html = f"<p>{description}</p>" if description else ""
     st.markdown(
         f"""
         <div class="drop-in">
-            <div class="pulse-subheading">PulseMax</div>
-            <div class="pulse-headline">{title}</div>
-            {_subtitle}
+            <div class="pulse-subheading">{title}</div>
+            {description_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_empty_state(message: str, help_text: str | None = None) -> None:
+    """Render an empty-state card."""
+
+    help_html = f"<span>{help_text}</span>" if help_text else ""
+    st.markdown(
+        f"""
+        <div class="pulse-empty-state drop-in">
+            <strong>{message}</strong>
+            {help_html}
         </div>
         """,
         unsafe_allow_html=True,
@@ -57,9 +118,9 @@ def render_metric_grid(metrics: Iterable[MetricDatum], columns: int = 4) -> None
     if not metric_list:
         return
 
-    cols = st.columns(columns)
+    cols = st.columns(min(columns, len(metric_list)))
     for ordinal, metric in enumerate(metric_list):
-        col = cols[ordinal % columns]
+        col = cols[ordinal % len(cols)]
         with col:
             _render_metric_card(metric, 0.15 * ordinal)
 
