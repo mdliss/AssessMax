@@ -1,0 +1,15 @@
+{"speaker": "Teacher", "text": "Time for group presentations! Sarah's team is up first.", "timestamp": "11:00:00", "student_id": null}
+{"speaker": "Sarah Chen", "text": "Good morning everyone. Our team researched renewable energy, specifically solar power. Before I start, I want to acknowledge my teammates Emma and Marcus - they did amazing work on this project.", "timestamp": "11:00:15", "student_id": "550e8400-e29b-41d4-a716-446655440003"}
+{"speaker": "Student", "text": "*Someone's phone buzzes loudly*", "timestamp": "11:00:45", "student_id": null}
+{"speaker": "Sarah Chen", "text": "That's okay, I'll wait... So, as I was saying, solar panels convert sunlight into electricity through photovoltaic cells.", "timestamp": "11:01:00", "student_id": "550e8400-e29b-41d4-a716-446655440003"}
+{"speaker": "Teacher", "text": "Sarah, can you speak up please? Some students in the back can't hear.", "timestamp": "11:01:30", "student_id": null}
+{"speaker": "Sarah Chen", "text": "Oh, sorry! Is this better? I'll project my voice more. Let me repeat that last part for anyone who missed it. Solar panels convert sunlight into electricity through photovoltaic cells.", "timestamp": "11:01:45", "student_id": "550e8400-e29b-41d4-a716-446655440003"}
+{"speaker": "Student", "text": "I don't get it. How does that even work?", "timestamp": "11:02:15", "student_id": null}
+{"speaker": "Sarah Chen", "text": "That's a great question! Let me explain it another way. Think of it like a plant doing photosynthesis, but instead of making food, the panel makes electricity. The sunlight hits special materials that get excited and create an electric current.", "timestamp": "11:02:30", "student_id": "550e8400-e29b-41d4-a716-446655440003"}
+{"speaker": "Student", "text": "Oh! That makes more sense now.", "timestamp": "11:03:00", "student_id": null}
+{"speaker": "Sarah Chen", "text": "Awesome! Does anyone else have questions before I continue? I want to make sure everyone understands each part.", "timestamp": "11:03:15", "student_id": "550e8400-e29b-41d4-a716-446655440003"}
+{"speaker": "Emma Johnson", "text": "Sarah, should we show them the model Marcus built now?", "timestamp": "11:03:30", "student_id": "550e8400-e29b-41d4-a716-446655440001"}
+{"speaker": "Sarah Chen", "text": "Perfect timing Emma! Yes, this will help visualize what I just explained. Marcus, do you want to explain your building process?", "timestamp": "11:03:45", "student_id": "550e8400-e29b-41d4-a716-446655440003"}
+{"speaker": "Marcus Williams", "text": "Sure! So when I was building this...", "timestamp": "11:04:00", "student_id": "550e8400-e29b-41d4-a716-446655440002"}
+{"speaker": "Teacher", "text": "Excellent presentation Sarah. You handled those interruptions very professionally and made sure everyone could understand.", "timestamp": "11:10:00", "student_id": null}
+{"speaker": "Sarah Chen", "text": "Thank you! I practiced a lot last night, but I was still really nervous. Taking a breath when my phone buzzed helped me stay focused.", "timestamp": "11:10:15", "student_id": "550e8400-e29b-41d4-a716-446655440003"}

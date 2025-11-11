@@ -1,0 +1,5 @@
+boto3>=1.34.0
+# Note: For production, include NLP libraries via Lambda layers
+# spacy>=3.7.0
+# transformers>=4.38.0
+# numpy>=1.24.0

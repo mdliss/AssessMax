@@ -1,0 +1,14 @@
+{"speaker": "Teacher", "text": "Good morning class! Today we're working on group science projects about renewable energy.", "timestamp": "09:00:00", "student_id": null}
+{"speaker": "Emma Johnson", "text": "I'm really excited! Can I work with Sarah on the solar energy project?", "timestamp": "09:00:15", "student_id": "550e8400-e29b-41d4-a716-446655440001"}
+{"speaker": "Teacher", "text": "Sure Emma, but I'll need you to include Marcus in your group too.", "timestamp": "09:00:30", "student_id": null}
+{"speaker": "Emma Johnson", "text": "Absolutely! The more ideas we have, the better our project will be. Marcus, do you want to join us?", "timestamp": "09:00:45", "student_id": "550e8400-e29b-41d4-a716-446655440001"}
+{"speaker": "Marcus Williams", "text": "I don't know much about solar energy though...", "timestamp": "09:01:00", "student_id": "550e8400-e29b-41d4-a716-446655440002"}
+{"speaker": "Emma Johnson", "text": "That's totally okay! None of us are experts yet - that's why we're learning. We can all research different parts and teach each other. I think your perspective will actually help us think of things Sarah and I might miss.", "timestamp": "09:01:15", "student_id": "550e8400-e29b-41d4-a716-446655440001"}
+{"speaker": "Sarah Chen", "text": "Yeah! Plus I heard you're really good at building things. Maybe you could help us create a model?", "timestamp": "09:01:45", "student_id": "550e8400-e29b-41d4-a716-446655440003"}
+{"speaker": "Marcus Williams", "text": "Oh, I do like building stuff. Okay, I'm in!", "timestamp": "09:02:00", "student_id": "550e8400-e29b-41d4-a716-446655440002"}
+{"speaker": "Emma Johnson", "text": "Great! Let's start by dividing up the research tasks. Marcus, since you're interested in building, do you want to research how solar panels are physically constructed?", "timestamp": "09:02:15", "student_id": "550e8400-e29b-41d4-a716-446655440001"}
+{"speaker": "Teacher", "text": "I love how you're organizing this Emma. Remember, everyone needs to contribute equally to the presentation.", "timestamp": "09:03:00", "student_id": null}
+{"speaker": "Emma Johnson", "text": "Got it! We'll make sure to check in with each other every day and adjust if someone needs help. Is that okay with everyone?", "timestamp": "09:03:15", "student_id": "550e8400-e29b-41d4-a716-446655440001"}
+{"speaker": "Sarah Chen", "text": "Works for me!", "timestamp": "09:03:30", "student_id": "550e8400-e29b-41d4-a716-446655440003"}
+{"speaker": "Marcus Williams", "text": "Yeah, that sounds good.", "timestamp": "09:03:35", "student_id": "550e8400-e29b-41d4-a716-446655440002"}
+{"speaker": "Emma Johnson", "text": "Perfect! Let's exchange phone numbers so we can text if anyone gets stuck on homework.", "timestamp": "09:03:45", "student_id": "550e8400-e29b-41d4-a716-446655440001"}

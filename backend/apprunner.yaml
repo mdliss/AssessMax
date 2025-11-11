@@ -1,0 +1,22 @@
+version: 1.0
+runtime: python311
+build:
+  commands:
+    build:
+      - echo "Building AssessMax Backend..."
+      - pip install --upgrade pip
+      - pip install -e .
+      - python -m spacy download en_core_web_sm
+      - python -c "import nltk; nltk.download('punkt'); nltk.download('averaged_perceptron_tagger')"
+run:
+  runtime-version: 3.11
+  command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+  network:
+    port: 8000
+  env:
+    - name: APP_NAME
+      value: "AssessMax Backend"
+    - name: LOG_LEVEL
+      value: "INFO"
+    - name: PYTHONUNBUFFERED
+      value: "1"
