@@ -1,0 +1,1 @@
+- stop adding useless .txt or .md files that waste tokens and time

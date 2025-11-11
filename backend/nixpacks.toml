@@ -1,0 +1,15 @@
+[phases.setup]
+nixPkgs = ["python311", "postgresql"]
+
+[phases.install]
+cmds = [
+  "pip install --upgrade pip",
+  "pip install -e .",
+  "python -m spacy download en_core_web_sm"
+]
+
+[phases.build]
+cmds = ["python -c \"import nltk; nltk.download('punkt'); nltk.download('averaged_perceptron_tagger')\""]
+
+[start]
+cmd = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"

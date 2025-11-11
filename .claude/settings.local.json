@@ -46,7 +46,12 @@
       "Bash(aws logs describe-log-groups:*)",
       "Bash(aws logs tail:*)",
       "Bash(find:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(if [ ! -d \"venv\" ])",
+      "Bash(then python3.11 -m venv venv)",
+      "Bash(fi)",
+      "Bash(/tmp/dashboard_install.log)",
+      "Bash(python3.11 -m venv:*)"
     ],
     "deny": [],
     "ask": []
