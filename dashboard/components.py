@@ -62,19 +62,25 @@ def render_page_header(
         badge_html = "<div class='pulse-badges'>" + " ".join(badge_fragments) + "</div>"
 
     subtitle_html = f"<p class='pulse-hero-subtitle'>{subtitle}</p>" if subtitle else ""
-    st.markdown(
-        f"""
-        <section class="pulse-hero">
-            <div class="pulse-hero-content">
-                <div class="pulse-subheading">PulseMax</div>
-                <div class="pulse-hero-title">{title}</div>
-                {subtitle_html}
-                {badge_html}
-            </div>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
+
+    # Build HTML parts list to avoid empty line issues
+    html_parts = [
+        '<section class="pulse-hero">',
+        '<div class="pulse-hero-content">',
+        '<div class="pulse-subheading">PulseMax</div>',
+        f'<div class="pulse-hero-title">{title}</div>',
+    ]
+
+    if subtitle_html:
+        html_parts.append(subtitle_html)
+    if badge_html:
+        html_parts.append(badge_html)
+
+    html_parts.extend(['</div>', '</section>'])
+
+    html = '\n'.join(html_parts)
+
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def render_logo_badge(title: str, subtitle: str | None = None) -> None:
