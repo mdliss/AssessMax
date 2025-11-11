@@ -59,16 +59,18 @@ def render_page_header(
             badge_fragments.append(
                 f"<span class='{tone_class}'>{badge_value} {badge.label}</span>"
             )
-        badge_html = "<div class='pulse-hero-badges'>" + " ".join(badge_fragments) + "</div>"
+        badge_html = "<div class='pulse-badges'>" + " ".join(badge_fragments) + "</div>"
 
-    subtitle_html = f"<p>{subtitle}</p>" if subtitle else ""
+    subtitle_html = f"<p class='pulse-hero-subtitle'>{subtitle}</p>" if subtitle else ""
     st.markdown(
         f"""
-        <section class="pulse-hero drop-in">
-            <div class="pulse-subheading">PulseMax</div>
-            <h1>{title}</h1>
-            {subtitle_html}
-            {badge_html}
+        <section class="pulse-hero">
+            <div class="pulse-hero-content">
+                <div class="pulse-subheading">PulseMax</div>
+                <div class="pulse-hero-title">{title}</div>
+                {subtitle_html}
+                {badge_html}
+            </div>
         </section>
         """,
         unsafe_allow_html=True,
@@ -87,7 +89,7 @@ def render_section_header(title: str, description: str | None = None) -> None:
     description_html = f"<p>{description}</p>" if description else ""
     st.markdown(
         f"""
-        <div class="drop-in">
+        <div>
             <div class="pulse-subheading">{title}</div>
             {description_html}
         </div>
@@ -102,7 +104,7 @@ def render_empty_state(message: str, help_text: str | None = None) -> None:
     help_html = f"<span>{help_text}</span>" if help_text else ""
     st.markdown(
         f"""
-        <div class="pulse-empty-state drop-in">
+        <div class="pulse-empty">
             <strong>{message}</strong>
             {help_html}
         </div>
@@ -119,13 +121,13 @@ def render_metric_grid(metrics: Iterable[MetricDatum], columns: int = 4) -> None
         return
 
     cols = st.columns(min(columns, len(metric_list)))
-    for ordinal, metric in enumerate(metric_list):
-        col = cols[ordinal % len(cols)]
-        with col:
-            _render_metric_card(metric, 0.15 * ordinal)
+    for idx, metric in enumerate(metric_list):
+        column = cols[idx % len(cols)]
+        with column:
+            _render_metric_card(metric)
 
 
-def _render_metric_card(metric: MetricDatum, delay: float) -> None:
+def _render_metric_card(metric: MetricDatum) -> None:
     """Render a single metric card."""
 
     delta_icon = ""
@@ -143,14 +145,19 @@ def _render_metric_card(metric: MetricDatum, delay: float) -> None:
         if metric.caption
         else ""
     )
+    delta_html = (
+        f"<span class='{delta_class}'>{delta_icon} {metric.delta}</span>"
+        if metric.delta
+        else ""
+    )
 
     st.markdown(
         f"""
-        <div class="pulse-card drop-in delay-{min(int(delay * 10)+1, 5)}">
+        <div class="pulse-card">
             {caption_html}
             <div class="pulse-metric-value">{metric.value}</div>
             <div class="pulse-pill">{metric.label}</div>
-            {'<div class="pill-group"><span class="' + delta_class + f'">{delta_icon} {metric.delta}</span></div>' if metric.delta else ''}
+            <div class="pulse-badges">{delta_html}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -162,7 +169,7 @@ def render_notification(message: str, label: str = "Status") -> None:
 
     st.markdown(
         f"""
-        <div class="notification-banner drop-in delay-1">
+        <div class="notification-banner">
             <div>
                 <div class="label">{label}</div>
                 <strong>{message}</strong>
