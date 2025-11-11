@@ -111,14 +111,15 @@ def _render_class_trends(time_range: int, smoothing: str) -> None:
         color_discrete_sequence=[ "#14b8a6", "#0ea5e9", "#6366f1", "#f472b6", "#f97316" ],
         markers=True,
     )
-    overlay_fig.update_traces(marker=dict(size=6, line=dict(width=1, color="rgba(0,0,0,0.35)")))
+    overlay_fig.update_traces(marker=dict(size=6, line=dict(width=1, color="rgba(255,255,255,0.85)")))
     overlay_fig.update_layout(
         hovermode="x unified",
         xaxis_title="Assessment Date",
         yaxis_title="Average Score",
-        template="plotly_dark",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(20,20,20,0.78)",
+        template="plotly_white",
+        paper_bgcolor="rgba(255,255,255,0.95)",
+        plot_bgcolor="rgba(248,249,250,0.85)",
+        font=dict(color="#374151", family="Roboto Mono"),
         legend_title_text="Skill",
     )
     st.plotly_chart(overlay_fig, use_container_width=True, theme=None)

@@ -67,16 +67,16 @@ def create_skill_chart(data: dict[str, float], title: str = "Skill Scores") -> g
                 tickmode="linear",
                 tick0=0,
                 dtick=20,
-                gridcolor="rgba(38, 38, 38, 0.7)",
-                linecolor="rgba(38, 38, 38, 0.7)",
-                tickfont=dict(color="#b3b3b3"),
+                gridcolor="rgba(209, 213, 219, 0.7)",
+                linecolor="rgba(156, 163, 175, 0.7)",
+                tickfont=dict(color="#6b7280"),
             ),
             angularaxis=dict(
-                tickfont=dict(color="#d1d5db", size=11, family="Roboto Mono"),
+                tickfont=dict(color="#374151", size=11, family="Roboto Mono"),
             ),
         ),
         showlegend=False,
-        title=dict(text=title, x=0.5, xanchor="center", font=dict(color="#ffffff", size=18)),
+        title=dict(text=title, x=0.5, xanchor="center", font=dict(color="#111827", size=18)),
         margin=dict(l=45, r=45, t=70, b=45),
         height=400,
     )
@@ -120,12 +120,12 @@ def create_trend_chart(
         yaxis_title="Score",
         yaxis_range=[0, 100],
         xaxis=dict(
-            gridcolor="rgba(38, 38, 38, 0.6)",
-            tickfont=dict(color="#b3b3b3", family="Roboto Mono"),
+            gridcolor="rgba(209, 213, 219, 0.6)",
+            tickfont=dict(color="#6b7280", family="Roboto Mono"),
         ),
         yaxis=dict(
-            gridcolor="rgba(38, 38, 38, 0.6)",
-            tickfont=dict(color="#b3b3b3", family="Roboto Mono"),
+            gridcolor="rgba(209, 213, 219, 0.6)",
+            tickfont=dict(color="#6b7280", family="Roboto Mono"),
         ),
         height=400,
     )
@@ -242,16 +242,16 @@ def parse_uuid(uuid_str: str) -> UUID:
 
 
 def _apply_dark_plot_theme(fig: go.Figure) -> None:
-    """Apply the PulseMax dark theme to a Plotly figure in-place."""
+    """Apply the PulseMax light theme to a Plotly figure in-place."""
 
     fig.update_layout(
-        template="plotly_dark",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(20,20,20,0.78)",
-        font=dict(color="#d1d5db", family="Roboto Mono"),
+        template="plotly_white",
+        paper_bgcolor="rgba(255,255,255,0.95)",
+        plot_bgcolor="rgba(248,249,250,0.85)",
+        font=dict(color="#374151", family="Roboto Mono"),
         legend=dict(
-            bgcolor="rgba(20,20,20,0.6)",
-            bordercolor="rgba(38,38,38,0.6)",
+            bgcolor="rgba(255,255,255,0.9)",
+            bordercolor="rgba(209,213,219,0.6)",
             borderwidth=1,
         ),
     )

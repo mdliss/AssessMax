@@ -46,7 +46,7 @@ def show_class_overview() -> None:
             with col3:
                 if st.form_submit_button("Clear Cache", use_container_width=True):
                     st.cache_data.clear()
-                    st.experimental_rerun()
+                    st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
     if not class_id:
