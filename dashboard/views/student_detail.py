@@ -60,7 +60,7 @@ def show_student_detail() -> None:
                 fetch_latest_assessment.clear()  # type: ignore[attr-defined]
                 fetch_assessment_history.clear()  # type: ignore[attr-defined]
                 fetch_evidence.clear()  # type: ignore[attr-defined]
-                st.experimental_rerun()
+                st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
     st.caption(
