@@ -28,7 +28,7 @@ def show_login_page() -> None:
         with st.form("login_form", clear_on_submit=True):
             st.markdown(
                 """
-                <div class="pulse-card pulse-gradient drop-in">
+                <div class="pulse-card drop-in">
                     <div class="pulse-subheading">Authentication</div>
                     <div class="pulse-metric-value">Welcome Back</div>
                     <p>Enter your credentials to continue to the PulseMax command center.</p>

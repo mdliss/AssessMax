@@ -87,7 +87,7 @@ def _render_transcript_form() -> None:
     with st.form("transcript_upload_form"):
         st.markdown(
             """
-            <div class="pulse-card pulse-gradient drop-in">
+            <div class="pulse-card drop-in">
                 <span class="pulse-subheading">Transcript Upload</span>
                 <p>Supports JSONL, CSV, and TXT up to 50MB. Metadata drives roster matching and diarization confidence.</p>
             </div>
@@ -130,7 +130,7 @@ def _render_artifact_form() -> None:
     with st.form("artifact_upload_form"):
         st.markdown(
             """
-            <div class="pulse-card pulse-gradient drop-in">
+            <div class="pulse-card drop-in">
                 <span class="pulse-subheading">Artifact Upload</span>
                 <p>Attach essays, projects, or reflections to enrich the evidence graph for individual learners.</p>
             </div>

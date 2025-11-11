@@ -194,10 +194,10 @@ def show_latest_assessment(assessment: dict[str, Any], student_label: str) -> No
 
     with right:
         st.markdown("<div class='pulse-subheading'>Skill Focus</div>", unsafe_allow_html=True)
-        for idx, skill in enumerate(skills):
+        for skill in skills:
             st.markdown(
                 f"""
-                <div class="pulse-card drop-in delay-{(idx % 5) + 1}">
+                <div class="pulse-card drop-in">
                     <span class="pulse-subheading">{format_skill_name(skill['skill'])}</span>
                     <div class="pulse-metric-value">{skill['score']:.1f}</div>
                     <div class="pulse-pill">Confidence: {skill['confidence']:.2f}</div>
@@ -220,7 +220,7 @@ def show_evidence_section(evidence: dict[str, Any]) -> None:
     for span in evidence_spans:
         evidence_by_skill.setdefault(span.get("skill", "unknown"), []).append(span)
 
-    for idx, (skill, spans) in enumerate(evidence_by_skill.items()):
+    for skill, spans in evidence_by_skill.items():
         st.markdown(
             f"<div class='pulse-subheading'>{format_skill_name(skill)}</div>",
             unsafe_allow_html=True,
@@ -228,7 +228,7 @@ def show_evidence_section(evidence: dict[str, Any]) -> None:
         for span_idx, span in enumerate(spans, start=1):
             st.markdown(
                 f"""
-                <div class="pulse-card drop-in delay-{(idx + span_idx) % 5 + 1}">
+                <div class="pulse-card drop-in">
                     <div class="pulse-pill">Evidence {span_idx}</div>
                     <p><em>{span.get('span_text', 'N/A')}</em></p>
                     <div class="pill-group">
