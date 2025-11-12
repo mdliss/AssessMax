@@ -13,8 +13,16 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Initialize Step Functions client
-sfn_client = boto3.client("stepfunctions")
+# Lazy initialization of Step Functions client
+_sfn_client = None
+
+
+def get_sfn_client():
+    """Get or create Step Functions client with proper configuration"""
+    global _sfn_client
+    if _sfn_client is None:
+        _sfn_client = boto3.client("stepfunctions", region_name=settings.aws_region)
+    return _sfn_client
 
 
 class WorkflowError(Exception):
@@ -77,6 +85,7 @@ def trigger_transcript_workflow(
         )
 
         # Start execution
+        sfn_client = get_sfn_client()
         response = sfn_client.start_execution(
             stateMachineArn=state_machine_arn,
             name=f"job-{job_id}-{int(datetime.utcnow().timestamp())}",
@@ -114,6 +123,7 @@ def get_workflow_status(execution_arn: str) -> Dict[str, Any]:
     try:
         logger.info(f"Checking Step Functions execution status: {execution_arn}")
 
+        sfn_client = get_sfn_client()
         response = sfn_client.describe_execution(executionArn=execution_arn)
 
         return {

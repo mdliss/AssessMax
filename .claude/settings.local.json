@@ -75,7 +75,9 @@
       "Bash(./scripts/deploy-lambdas.sh:*)",
       "Bash(aws cloudformation describe-stack-events:*)",
       "Bash(aws cloudformation describe-stacks:*)",
-      "Bash(aws cloudformation validate-template:*)"
+      "Bash(aws cloudformation validate-template:*)",
+      "Bash(python:*)",
+      "Bash(uvicorn:*)"
     ],
     "deny": [],
     "ask": []
