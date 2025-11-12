@@ -265,14 +265,13 @@
                     <td class="py-3 pr-6 font-mono text-xs">{job.file_name}</td>
                     <td class="py-3 pr-6">
                       {#if job.status}
-                        {#let style = badgeStyle(job.status)}
-                          <span
-                            class="px-2 py-1 rounded-full text-xs"
-                            style={`background-color: ${style.backgroundColor}; color: ${style.color}`}
-                          >
-                            {statusLabel(job.status)}
-                          </span>
-                        {/let}
+                        {@const style = badgeStyle(job.status)}
+                        <span
+                          class="px-2 py-1 rounded-full text-xs"
+                          style={`background-color: ${style.backgroundColor}; color: ${style.color}`}
+                        >
+                          {statusLabel(job.status)}
+                        </span>
                       {:else}
                         —
                       {/if}
@@ -321,14 +320,13 @@
                   <tr class="border-b border-[color:var(--border-color)] hover:bg-[color:var(--card-bg)]/40 transition">
                     <td class="py-3 pr-6 font-mono text-xs">{job.file_name}</td>
                     <td class="py-3 pr-6">
-                      {#let style = badgeStyle(job.status)}
-                        <span
-                          class="px-2 py-1 rounded-full text-xs"
-                          style={`background-color: ${style.backgroundColor}; color: ${style.color}`}
-                        >
-                          {statusLabel(job.status)}
-                        </span>
-                      {/let}
+                      {@const style = badgeStyle(job.status)}
+                      <span
+                        class="px-2 py-1 rounded-full text-xs"
+                        style={`background-color: ${style.backgroundColor}; color: ${style.color}`}
+                      >
+                        {statusLabel(job.status)}
+                      </span>
                     </td>
                     <td class="py-3 pr-6">{formatDateTime(job.started_at)}</td>
                     <td class="py-3 pr-6">{job.class_id}</td>
@@ -395,14 +393,13 @@
                   <tr class="border-b border-[color:var(--border-color)] hover:bg-[color:var(--card-bg)]/40 transition">
                     <td class="py-3 pr-6 font-mono text-xs">{job.file_name}</td>
                     <td class="py-3 pr-6">
-                      {#let style = badgeStyle(job.status)}
-                        <span
-                          class="px-2 py-1 rounded-full text-xs"
-                          style={`background-color: ${style.backgroundColor}; color: ${style.color}`}
-                        >
-                          {statusLabel(job.status)}
-                        </span>
-                      {/let}
+                      {@const style = badgeStyle(job.status)}
+                      <span
+                        class="px-2 py-1 rounded-full text-xs"
+                        style={`background-color: ${style.backgroundColor}; color: ${style.color}`}
+                      >
+                        {statusLabel(job.status)}
+                      </span>
                     </td>
                     <td class="py-3 pr-6">{formatDate(job.created_at)}</td>
                     <td class="py-3 pr-6">{formatDate(job.completed_at)}</td>
