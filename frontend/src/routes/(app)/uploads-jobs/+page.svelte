@@ -222,7 +222,7 @@
         metadata: {
           class_id: 'MS-7A',
           date: new Date().toISOString().split('T')[0],
-          student_roster: [], // Could be extracted from file or made configurable
+          student_roster: ['student-001'], // Default roster - could be made configurable
           source: 'manual'
         }
       });

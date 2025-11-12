@@ -67,7 +67,8 @@
       "Bash(aws iam create-access-key:*)",
       "Bash(ls:*)",
       "Bash(aws dynamodb create-table:*)",
-      "Bash(aws s3api get-bucket-cors:*)"
+      "Bash(aws s3api get-bucket-cors:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": [],
     "ask": []
