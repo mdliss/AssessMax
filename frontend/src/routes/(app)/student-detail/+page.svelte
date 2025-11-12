@@ -13,6 +13,7 @@
   import RadarChart from '$lib/components/RadarChart.svelte';
   import { Chart } from 'chart.js/auto';
   import type { ChartDataset, ChartOptions } from 'chart.js';
+  import { jsPDF } from 'jspdf';
 
   export let data: PageData;
 
@@ -236,6 +237,101 @@
     } else {
       void renderTrendChart(historyChartConfig);
     }
+  }
+
+  function exportToCSV() {
+    if (!history || !selectedStudent) {
+      return;
+    }
+
+    const assessments = [...history.assessments].sort(
+      (a, b) => new Date(a.assessed_on).getTime() - new Date(b.assessed_on).getTime()
+    );
+
+    const headers = ['Date', 'Empathy', 'Adaptability', 'Collaboration', 'Communication', 'Self Regulation'];
+    const rows = assessments.map((assessment) => {
+      const skillMap: Record<string, number> = {};
+      assessment.skills.forEach((skill) => {
+        skillMap[skill.skill] = skill.score;
+      });
+
+      return [
+        LONG_DATE_FORMAT.format(new Date(assessment.assessed_on)),
+        skillMap['empathy']?.toFixed(1) ?? 'N/A',
+        skillMap['adaptability']?.toFixed(1) ?? 'N/A',
+        skillMap['collaboration']?.toFixed(1) ?? 'N/A',
+        skillMap['communication']?.toFixed(1) ?? 'N/A',
+        skillMap['self_regulation']?.toFixed(1) ?? 'N/A'
+      ];
+    });
+
+    const csvContent = [headers, ...rows].map((row) => row.join(',')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${selectedStudent.name ?? 'student'}_assessment_history.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function exportToPDF() {
+    if (!history || !selectedStudent) {
+      return;
+    }
+
+    const doc = new jsPDF();
+    const assessments = [...history.assessments].sort(
+      (a, b) => new Date(a.assessed_on).getTime() - new Date(b.assessed_on).getTime()
+    );
+
+    doc.setFontSize(18);
+    doc.text('Assessment History Report', 20, 20);
+
+    doc.setFontSize(12);
+    doc.text(`Student: ${selectedStudent.name ?? 'Unnamed Student'}`, 20, 35);
+    doc.text(`Class: ${selectedClass}`, 20, 42);
+    doc.text(`Generated: ${LONG_DATE_FORMAT.format(new Date())}`, 20, 49);
+
+    let yPosition = 65;
+    const lineHeight = 7;
+    const pageHeight = doc.internal.pageSize.height;
+
+    doc.setFontSize(14);
+    doc.text('Assessment History', 20, yPosition);
+    yPosition += lineHeight + 3;
+
+    doc.setFontSize(10);
+
+    assessments.forEach((assessment) => {
+      if (yPosition > pageHeight - 40) {
+        doc.addPage();
+        yPosition = 20;
+      }
+
+      const date = LONG_DATE_FORMAT.format(new Date(assessment.assessed_on));
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${date}`, 20, yPosition);
+      yPosition += lineHeight;
+
+      doc.setFont('helvetica', 'normal');
+      assessment.skills.forEach((skill) => {
+        if (yPosition > pageHeight - 20) {
+          doc.addPage();
+          yPosition = 20;
+        }
+        const skillLabel = SKILL_LABELS[skill.skill as SkillKey] ?? skill.skill;
+        doc.text(`  ${skillLabel}: ${skill.score.toFixed(1)}`, 25, yPosition);
+        yPosition += lineHeight;
+      });
+
+      yPosition += 3;
+    });
+
+    doc.save(`${selectedStudent.name ?? 'student'}_assessment_history.pdf`);
   }
 
   onDestroy(() => {
@@ -593,8 +689,8 @@
     <div class="pulse-subheading">Assessment History</div>
     <div class="flex gap-4">
       <button class="btn-outline" type="button">Trend Lines</button>
-      <button class="btn-outline" type="button">Export CSV</button>
-      <button class="btn-outline" type="button">Export PDF</button>
+      <button class="btn-outline" type="button" on:click={exportToCSV} disabled={!history || history.assessments.length === 0}>Export CSV</button>
+      <button class="btn-outline" type="button" on:click={exportToPDF} disabled={!history || history.assessments.length === 0}>Export PDF</button>
     </div>
     <div class="h-[320px] rounded-xl border border-[color:var(--border-color)] relative overflow-hidden bg-[color:var(--surface-muted)]">
       {#if historyChartConfig}
