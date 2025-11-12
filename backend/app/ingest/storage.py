@@ -339,3 +339,4 @@ class DynamoDBClient:
 # Global client instances
 s3_client = S3Client()
 dynamodb_client = DynamoDBClient()
+# Force Railway rebuild - Wed Nov 12 17:13:04 CST 2025
