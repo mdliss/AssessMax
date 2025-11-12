@@ -670,6 +670,10 @@
   $: refreshChart(trendComputation);
 
   onMount(async () => {
+    console.log('[Trends Debug] onMount - canvas available, re-rendering chart');
+    // Force chart refresh after mount to ensure canvas is ready
+    refreshChart(trendComputation);
+
     if (!classHistoriesMap[selectedClass]) {
       await ensureClassData(selectedClass);
     }
