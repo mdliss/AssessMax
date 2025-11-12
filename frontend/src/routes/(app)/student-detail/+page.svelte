@@ -1,71 +1,233 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
   import type { PageData } from './$types';
-  import { ROUTES } from '$lib/config';
   import { clearCache } from '$lib/api/client';
-  import { getLatestAssessment, getAssessmentHistory, type AssessmentResponse, type AssessmentHistoryResponse } from '$lib/api/assessments';
+  import {
+    getLatestAssessment,
+    getAssessmentHistory,
+    getClassDashboard,
+    type AssessmentResponse,
+    type AssessmentHistoryResponse,
+    type StudentSummary
+  } from '$lib/api/assessments';
   import RadarChart from '$lib/components/RadarChart.svelte';
 
   export let data: PageData;
 
-  const sampleStudents = [
-    { name: 'Emma Johnson', id: '550e8400-e29b-41d4-a716-446655440001' },
-    { name: 'Marcus Williams', id: '550e8400-e29b-41d4-a716-446655440002' },
-    { name: 'Sarah Chen', id: '550e8400-e29b-41d4-a716-446655440003' },
-    { name: 'Alicia Rivera', id: '550e8400-e29b-41d4-a716-446655440004' }
-  ];
+  const classIds = ['MS-7A', 'MS-7B', 'MS-8A'];
 
-  let studentId = data.initialStudentId ?? sampleStudents[0]?.id ?? '';
+  let selectedClass =
+    data.initialClassId && classIds.includes(data.initialClassId)
+      ? data.initialClassId
+      : classIds[0];
+
+  let studentId = data.initialStudentId ?? '';
   let loading = false;
+  let rosterLoading = false;
   let error: string | null = null;
+  let rosterError: string | null = null;
   let assessment: AssessmentResponse | null = null;
   let history: AssessmentHistoryResponse | null = null;
 
-  $: skillScores = assessment?.skills.reduce((acc, skill) => {
-    acc[skill.skill] = skill.score;
-    return acc;
-  }, {} as Record<string, number>) ?? {};
+  let classRosters: Record<string, StudentSummary[]> = {};
+  $: availableStudents = classRosters[selectedClass] ?? [];
+  $: selectedStudent = availableStudents.find((student) => student.student_id === studentId);
 
-  onMount(() => {
+  const classLabels: Record<string, string> = {
+    'MS-7A': 'MS-7A · Advisory A',
+    'MS-7B': 'MS-7B · Advisory B',
+    'MS-8A': 'MS-8A · Capstone'
+  };
+
+  $: skillScores =
+    assessment?.skills.reduce((acc, skill) => {
+      acc[skill.skill] = skill.score;
+      return acc;
+    }, {} as Record<string, number>) ?? {};
+
+  $: averageScore = (() => {
+    const values = Object.values(skillScores);
+    if (values.length === 0) return null;
+    const total = values.reduce((sum, value) => sum + value, 0);
+    return (total / values.length).toFixed(1);
+  })();
+
+  $: topSkill = (() => {
+    const entries = Object.entries(skillScores).sort((a, b) => b[1] - a[1]);
+    if (entries.length === 0) return '';
+    return entries[0][0].replace('_', ' ');
+  })();
+
+  onMount(async () => {
+    await loadRosters();
+
     if (studentId) {
-      loadStudentData();
+      const containing = findClassForStudent(studentId);
+      if (containing) {
+        selectedClass = containing;
+      } else {
+        rosterError = 'Student not found in rostered classes. Select a student from the list.';
+      }
+      await loadStudentData(studentId);
+    } else {
+      const fallback = nextAvailableStudent(selectedClass) ?? nextAvailableStudent();
+      if (fallback) {
+        await selectStudent(fallback.student_id, { updateUrl: true });
+      }
     }
   });
 
-  async function loadStudentData() {
-    if (!studentId) return;
+  function findClassForStudent(id: string): string | null {
+    for (const classId of classIds) {
+      if ((classRosters[classId] ?? []).some((student) => student.student_id === id)) {
+        return classId;
+      }
+    }
+    return null;
+  }
+
+  function nextAvailableStudent(classId?: string): StudentSummary | null {
+    if (classId && (classRosters[classId]?.length ?? 0) > 0) {
+      return classRosters[classId][0];
+    }
+    for (const id of classIds) {
+      if ((classRosters[id]?.length ?? 0) > 0) {
+        return classRosters[id][0];
+      }
+    }
+    return null;
+  }
+
+  async function loadRosters(force = false) {
+    rosterLoading = true;
+    rosterError = null;
+
+    if (force) {
+      clearCache('GET:/v1/classes');
+    }
+
+    const results = await Promise.allSettled(classIds.map((classId) => getClassDashboard(classId)));
+    const updated: Record<string, StudentSummary[]> = {};
+
+    results.forEach((result, index) => {
+      const classId = classIds[index];
+      if (result.status === 'fulfilled') {
+        updated[classId] = result.value.students;
+      } else {
+        console.error(`Failed to load roster for ${classId}:`, result.reason);
+        rosterError = 'Some class rosters could not be loaded.';
+        updated[classId] = classRosters[classId] ?? [];
+      }
+    });
+
+    classRosters = updated;
+    rosterLoading = false;
+  }
+
+  async function loadStudentData(id: string = studentId) {
+    if (!id) {
+      assessment = null;
+      history = null;
+      return;
+    }
 
     loading = true;
     error = null;
+
     try {
-      [assessment, history] = await Promise.all([
-        getLatestAssessment(studentId),
-        getAssessmentHistory(studentId)
+      const [latest, historyResponse] = await Promise.all([
+        getLatestAssessment(id),
+        getAssessmentHistory(id)
       ]);
+      assessment = latest;
+      history = historyResponse;
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Unable to load student data';
+      assessment = null;
+      history = null;
+      error =
+        err instanceof Error
+          ? err.message
+          : 'Unable to load student data. Please verify the student ID.';
       console.error('Failed to load student data:', err);
     } finally {
       loading = false;
     }
   }
 
-  async function handleRefresh() {
-    clearCache('GET:/v1/students');
-    clearCache('GET:/v1/assessments');
-    await loadStudentData();
+  function updateUrl(id: string, classId: string) {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('id', id);
+    url.searchParams.set('class', classId);
+    window.history.replaceState({}, '', url.toString());
   }
 
-  function selectStudent(id: string) {
+  async function selectStudent(
+    id: string,
+    options: {
+      updateUrl?: boolean;
+    } = {}
+  ) {
+    const { updateUrl: shouldUpdateUrl = true } = options;
+    if (!id) return;
+
     studentId = id;
-    goto(`${ROUTES.studentDetail}?id=${id}`, { replaceState: true });
-    loadStudentData();
+    if (shouldUpdateUrl) {
+      updateUrl(id, selectedClass);
+    }
+
+    await loadStudentData(id);
+  }
+
+  async function handleClassChange(event: Event) {
+    const newClassId = (event.currentTarget as HTMLSelectElement).value;
+    if (!classIds.includes(newClassId)) return;
+    selectedClass = newClassId;
+
+    if (!availableStudents.some((student) => student.student_id === studentId)) {
+      const fallback = nextAvailableStudent(selectedClass);
+      if (fallback) {
+        await selectStudent(fallback.student_id);
+      } else {
+        assessment = null;
+        history = null;
+        error = 'No students found in the selected class.';
+      }
+    } else if (studentId) {
+      updateUrl(studentId, selectedClass);
+    }
+  }
+
+  function handleManualInput(value: string) {
+    studentId = value.trim();
+  }
+
+  async function handleStudentSelect(event: Event) {
+    const newId = (event.currentTarget as HTMLSelectElement).value;
+    await selectStudent(newId);
+  }
+
+  async function handleRefresh() {
+    if (studentId) {
+      updateUrl(studentId, selectedClass);
+    }
+    clearCache('GET:/v1/assessments');
+    await loadRosters(true);
+    if (studentId) {
+      const containing = findClassForStudent(studentId);
+      if (containing) {
+        selectedClass = containing;
+      }
+      await loadStudentData(studentId);
+    } else {
+      assessment = null;
+      history = null;
+    }
   }
 </script>
 
 <svelte:head>
-  <title>Student Detail · PulseMax</title>
+  <title>Student Detail · AssessMax</title>
 </svelte:head>
 
 <div class="space-y-8">
@@ -74,25 +236,90 @@
     <div class="grid gap-4 md:grid-cols-[2fr_1fr]">
       <label class="pulse-form-field">
         <span class="text-sm text-muted">Student UUID</span>
-        <input class="input-text" bind:value={studentId} placeholder="UUID" />
+        <input
+          class="input-text"
+          value={studentId}
+          placeholder="UUID"
+          on:input={(event) => handleManualInput((event.currentTarget as HTMLInputElement).value)}
+        />
       </label>
-      <button class="pulse-button" type="button" on:click={handleRefresh} disabled={loading}>
-        {#if loading}
-          Refresh Records…
-        {:else}
-          Refresh Records
-        {/if}
-      </button>
+      <div class="flex gap-2">
+        <button
+          class="pulse-button"
+          type="button"
+          on:click={handleRefresh}
+          disabled={loading || rosterLoading}
+        >
+          {#if loading || rosterLoading}
+            Refreshing…
+          {:else}
+            Refresh Records
+          {/if}
+        </button>
+      </div>
     </div>
 
-    <div class="text-sm text-muted font-mono">
-      Quick selections:
-      {#each sampleStudents as student, index}
-        <button class="btn-ghost inline-flex items-center gap-1" type="button" on:click={() => selectStudent(student.id)}>
-          {student.name}
-        </button>{index < sampleStudents.length - 1 ? '·' : ''}
-      {/each}
+    <div class="grid gap-4 md:grid-cols-2">
+      <label class="pulse-form-field">
+        <span class="text-sm text-muted">Class</span>
+        <select
+          class="input-select"
+          value={selectedClass}
+          on:change={handleClassChange}
+          disabled={rosterLoading}
+        >
+          {#each classIds as classId}
+            <option value={classId}>{classLabels[classId] ?? classId}</option>
+          {/each}
+        </select>
+      </label>
+      <label class="pulse-form-field">
+        <span class="text-sm text-muted">Student</span>
+        <select
+          class="input-select"
+          value={studentId}
+          on:change={handleStudentSelect}
+          disabled={availableStudents.length === 0 || rosterLoading}
+        >
+          {#if availableStudents.length === 0}
+            <option value="">No students available</option>
+          {:else}
+            {#each availableStudents as student}
+              <option value={student.student_id}>
+                {(student.name ?? 'Unnamed Student') + ' · ' + selectedClass}
+              </option>
+            {/each}
+          {/if}
+        </select>
+      </label>
     </div>
+
+    {#if rosterLoading}
+      <div class="text-sm text-muted font-mono">Loading class rosters…</div>
+    {:else}
+      {#if rosterError}
+        <div class="pulse-notification error" role="alert">{rosterError}</div>
+      {/if}
+      {#if selectedStudent}
+        <div class="text-sm text-muted font-mono">
+          Viewing {selectedStudent.name ?? 'Unnamed Student'} · {selectedClass}
+        </div>
+      {/if}
+      {#if availableStudents.length > 0}
+        <div class="text-sm text-muted flex flex-wrap gap-2 items-center">
+          <span class="font-mono">Quick selections:</span>
+          {#each availableStudents.slice(0, 6) as student}
+            <button
+              class="btn-ghost inline-flex items-center gap-1"
+              type="button"
+              on:click={() => selectStudent(student.student_id)}
+            >
+              {student.name ?? student.student_id.slice(0, 8)}
+            </button>
+          {/each}
+        </div>
+      {/if}
+    {/if}
 
     {#if error}
       <div class="pulse-notification error" role="alert">{error}</div>
@@ -114,13 +341,13 @@
           </div>
           <div class="pulse-metric">
             <div class="pulse-metric-value">
-              {(Object.values(skillScores).reduce((a, b) => a + b, 0) / Object.values(skillScores).length).toFixed(1)}
+              {averageScore ?? '--'}
             </div>
             <p class="text-muted">Average Score</p>
           </div>
           <div class="pulse-metric">
             <div class="pulse-metric-value text-sm capitalize">
-              {Object.entries(skillScores).sort((a, b) => b[1] - a[1])[0]?.[0].replace('_', ' ')}
+              {topSkill || '--'}
             </div>
             <p class="text-muted">Top Skill</p>
           </div>

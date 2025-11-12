@@ -51,8 +51,12 @@
     clearCache();
   }
 
-  function openStudentDetail(studentId: string) {
-    goto(`${ROUTES.studentDetail}?id=${studentId}`);
+  function openStudentDetail(student: StudentSummary) {
+    const params = new URLSearchParams({
+      id: student.student_id,
+      class: classId
+    });
+    goto(`${ROUTES.studentDetail}?${params.toString()}`);
   }
 
   function calculateStudentAverage(student: StudentSummary): string {
@@ -69,7 +73,7 @@
 </script>
 
 <svelte:head>
-  <title>Class Overview · PulseMax</title>
+  <title>Class Overview · AssessMax</title>
 </svelte:head>
 
 <div class="space-y-8">
@@ -180,13 +184,21 @@
           {:else}
             {#each students as student}
               <tr class="border-t border-[color:var(--border-color)]">
-                <td class="py-3 pr-6">{student.name ?? 'Unknown'}</td>
+                <td class="py-3 pr-6">
+                  <button
+                    class="btn-ghost px-0 text-left font-medium"
+                    type="button"
+                    on:click={() => openStudentDetail(student)}
+                  >
+                    {student.name ?? 'Unknown'}
+                  </button>
+                </td>
                 <td class="py-3 pr-6 font-mono text-xs">{student.student_id}</td>
                 <td class="py-3 pr-6">{student.assessment_count}</td>
                 <td class="py-3 pr-6">{getLastAssessedDate(student)}</td>
                 <td class="py-3 pr-6">{calculateStudentAverage(student)}</td>
                 <td class="py-3 pr-6">
-                  <button class="btn-outline text-xs" type="button" on:click={() => openStudentDetail(student.student_id)}>
+                  <button class="btn-outline text-xs" type="button" on:click={() => openStudentDetail(student)}>
                     View Detail
                   </button>
                 </td>
