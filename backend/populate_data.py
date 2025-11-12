@@ -7,11 +7,13 @@ powers the dashboard, history views, and uploads/jobs page without manual entry.
 from __future__ import annotations
 
 import asyncio
+import math
 import random
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid4
+from typing import TypedDict
 
 from sqlalchemy import DateTime, ForeignKey, String, Text, delete
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -51,6 +53,79 @@ class UploadJob(Base, TimestampMixin):
 
 
 SKILLS = ["empathy", "adaptability", "collaboration", "communication", "self_regulation"]
+SCORE_MIN = 2.4
+SCORE_MAX = 9.6
+
+ARCHETYPE_WEIGHTS = [
+    ("improver", 0.36),
+    ("high_performer", 0.24),
+    ("struggling", 0.17),
+    ("volatile", 0.15),
+    ("late_bloomer", 0.08),
+]
+
+ARCHETYPE_BEHAVIOR = {
+    "improver": {
+        "start": (3.0, 4.6),
+        "delta": (1.8, 3.2),
+        "curve": "accelerate",
+        "noise": (0.2, 0.45),
+        "volatility": 0.3,
+        "seasonal_scale": 0.22,
+        "setback_chance": 0.55,
+        "smoothing": 0.58,
+    },
+    "high_performer": {
+        "start": (7.4, 9.0),
+        "delta": (-0.3, 0.4),
+        "curve": "stable",
+        "noise": (0.12, 0.28),
+        "volatility": 0.18,
+        "seasonal_scale": 0.12,
+        "setback_chance": 0.2,
+        "smoothing": 0.4,
+    },
+    "struggling": {
+        "start": (2.6, 4.0),
+        "delta": (-0.4, 0.6),
+        "curve": "slow",
+        "noise": (0.18, 0.42),
+        "volatility": 0.32,
+        "seasonal_scale": 0.2,
+        "setback_chance": 0.48,
+        "smoothing": 0.54,
+    },
+    "volatile": {
+        "start": (4.0, 7.0),
+        "delta": (-0.5, 0.7),
+        "curve": "wavy",
+        "noise": (0.35, 0.85),
+        "volatility": 0.68,
+        "seasonal_scale": 0.28,
+        "setback_chance": 0.72,
+        "smoothing": 0.7,
+    },
+    "late_bloomer": {
+        "start": (3.0, 4.8),
+        "delta": (2.2, 3.6),
+        "curve": "late",
+        "noise": (0.22, 0.5),
+        "volatility": 0.38,
+        "seasonal_scale": 0.24,
+        "setback_chance": 0.52,
+        "smoothing": 0.6,
+    },
+}
+
+
+class SeriesContext(TypedDict):
+    base_level: float
+    trend_bias: float
+    seasonal_phase: float
+    slump_window: tuple[float, float]
+    rebound_window: tuple[float, float]
+    phase_offsets: dict[str, float]
+
 MODEL_VERSIONS = ["v1.3.0", "v1.3.1", "v1.4.0"]
 USER_IDS = [
     "educator.smith",
@@ -59,8 +134,6 @@ USER_IDS = [
     "educator.patel",
     "principal.martinez",
 ]
-TREND_CHOICES = ["improving", "declining", "mixed"]
-
 CLASS_CONFIGS = [
     {
         "id": "MS-7A",
@@ -297,12 +370,154 @@ async def create_students_for_class(
     return created
 
 
-def generate_assessment_dates(num_assessments: int) -> list[date]:
-    """Spread assessments across the last six months."""
+def _choose_archetype() -> str:
+    pivot = random.random()
+    cumulative = 0.0
+    for name, weight in ARCHETYPE_WEIGHTS:
+        cumulative += weight
+        if pivot <= cumulative:
+            return name
+    return ARCHETYPE_WEIGHTS[-1][0]
 
-    start = date.today() - timedelta(days=180)
-    offsets = sorted(random.sample(range(0, 181), num_assessments))
-    return [start + timedelta(days=offset) for offset in offsets]
+
+def _clamp_score(value: float) -> float:
+    return max(SCORE_MIN, min(SCORE_MAX, value))
+
+
+def _generate_schedule() -> list[date]:
+    """Create assessment dates every 1-2 weeks across roughly six months."""
+
+    end_date = date.today()
+    total_days = random.randint(170, 186)
+    start_date = end_date - timedelta(days=total_days)
+    count = random.randint(14, 20)
+
+    intervals: list[int] = []
+    remaining_days = (end_date - start_date).days
+    remaining_slots = count - 1
+
+    for _ in range(count - 1):
+        min_remaining = 7 * (remaining_slots - 1)
+        max_remaining = 14 * (remaining_slots - 1)
+        low = max(7, remaining_days - max_remaining)
+        high = min(14, remaining_days - min_remaining) if remaining_slots > 1 else remaining_days
+        step = random.randint(low, high)
+        intervals.append(step)
+        remaining_days -= step
+        remaining_slots -= 1
+
+    dates: list[date] = [start_date + timedelta(days=random.randint(0, 3))]
+    for step in intervals:
+        dates.append(dates[-1] + timedelta(days=step))
+
+    shift = dates[-1] - end_date
+    if shift.days != 0:
+        dates = [d - shift for d in dates]
+
+    return dates
+
+
+def _skill_offsets() -> dict[str, float]:
+    offsets = {skill: random.uniform(-0.35, 0.35) for skill in SKILLS}
+
+    comm_cluster = random.uniform(-0.25, 0.25)
+    offsets["communication"] += comm_cluster
+    offsets["collaboration"] += comm_cluster * random.uniform(0.7, 1.05)
+
+    empathy_cluster = random.uniform(-0.2, 0.2)
+    offsets["empathy"] += empathy_cluster
+    offsets["self_regulation"] += empathy_cluster * random.uniform(0.6, 0.95)
+
+    return offsets
+
+
+def _curve_value(curve: str, start: float, end: float, progress: float) -> float:
+    span = end - start
+    if curve == "accelerate":
+        eased = progress**1.2
+        return start + span * eased
+    if curve == "stable":
+        eased = progress**0.9
+        return start + span * eased
+    if curve == "slow":
+        eased = progress**1.35
+        return start + span * eased
+    if curve == "wavy":
+        base = start + span * progress
+        wobble = math.sin(progress * math.tau * 1.2) * (abs(span) * 0.35 + 0.45)
+        return base + wobble
+    if curve == "late":
+        if progress < 0.45:
+            eased = progress * 0.35
+        else:
+            ratio = max(0.0, (progress - 0.45) / 0.55)
+            eased = 0.35 + 0.65 * (ratio**1.1)
+        return start + span * eased
+    eased = progress
+    return start + span * eased
+
+
+def _seasonal_adjust(progress: float, scale: float, phase: float, slump: tuple[float, float], rebound: tuple[float, float]) -> float:
+    seasonal = math.sin((progress + phase) * math.tau) * scale
+    if slump[0] <= progress <= slump[1]:
+        seasonal -= scale * 1.4
+    if rebound[0] <= progress <= rebound[1]:
+        seasonal += scale * 1.2
+    return seasonal
+
+
+def _generate_series(
+    archetype: str,
+    skill: str,
+    num_points: int,
+    offsets: dict[str, float],
+    shared_traits: SeriesContext,
+) -> list[float]:
+    config = ARCHETYPE_BEHAVIOR[archetype]
+    start_base = random.uniform(*config["start"])
+    start = _clamp_score(start_base + shared_traits["base_level"] + offsets[skill])
+
+    delta = random.uniform(*config["delta"])
+    delta += offsets[skill] * 0.35
+    delta += shared_traits["trend_bias"]
+    end = _clamp_score(start + delta)
+
+    slump_window = shared_traits["slump_window"]
+    rebound_window = shared_traits["rebound_window"]
+    seasonal_phase = shared_traits["seasonal_phase"] + shared_traits["phase_offsets"][skill]
+
+    setback_index = None
+    if random.random() < config["setback_chance"] and num_points > 6:
+        setback_index = random.randint(2, max(3, num_points // 2))
+
+    smoothing = config["smoothing"]
+    volatility = config["volatility"]
+    noise_min, noise_max = config["noise"]
+
+    series: list[float] = []
+    previous = start
+    for idx in range(num_points):
+        progress = idx / max(num_points - 1, 1)
+        target = _curve_value(config["curve"], start, end, progress)
+
+        seasonal = _seasonal_adjust(progress, config["seasonal_scale"], seasonal_phase, slump_window, rebound_window)
+        noise_span = random.uniform(noise_min, noise_max)
+        noise = random.uniform(-noise_span, noise_span)
+        raw = target + seasonal + noise + offsets[skill] * 0.08 + shared_traits["base_level"] * 0.1
+
+        if setback_index is not None and idx == setback_index:
+            raw -= random.uniform(0.25, 0.6)
+
+        candidate = previous + (raw - previous) * smoothing if idx > 0 else raw
+        candidate += random.uniform(-volatility, volatility) * 0.3
+        if archetype == "volatile":
+            candidate += random.uniform(-volatility, volatility) * 0.6
+
+        candidate = _clamp_score(candidate)
+        series.append(candidate)
+        previous = candidate
+
+    return series
 
 
 async def create_assessments_for_student(
@@ -312,36 +527,43 @@ async def create_assessments_for_student(
     stats: dict[str, int],
     class_registry: dict[str, dict[str, list]],
 ) -> None:
-    """Generate 10-15 assessments per student with evidence and trend."""
+    """Create a six-month weekly/bi-weekly assessment series with archetype-driven variation."""
 
-    num_assessments = random.randint(10, 15)
-    assessment_dates = generate_assessment_dates(num_assessments)
-    trend = random.choice(TREND_CHOICES)
+    archetype = _choose_archetype()
+    # Archetypes drive long-term trajectory (improvers, late bloomers, volatile learners, etc.).
+    assessment_dates = _generate_schedule()
+    num_assessments = len(assessment_dates)
 
-    baseline = {skill: random.uniform(4.8, 8.2) for skill in SKILLS}
-    if trend == "improving":
-        base_slope = random.uniform(0.8, 1.4)
-        slopes = {skill: base_slope * random.uniform(0.6, 1.2) for skill in SKILLS}
-    elif trend == "declining":
-        base_slope = -random.uniform(0.6, 1.0)
-        slopes = {skill: base_slope * random.uniform(0.7, 1.3) for skill in SKILLS}
-    else:
-        slopes = {skill: random.uniform(-0.6, 0.9) for skill in SKILLS}
+    offsets = _skill_offsets()
+    shared_traits: SeriesContext = {
+        "base_level": random.uniform(-0.25, 0.4),
+        "trend_bias": random.uniform(-0.15, 0.25),
+        "seasonal_phase": random.random(),
+        "slump_window": (
+            random.uniform(0.32, 0.4),
+            random.uniform(0.42, 0.5),
+        ),
+        "rebound_window": (
+            random.uniform(0.55, 0.63),
+            random.uniform(0.68, 0.76),
+        ),
+        "phase_offsets": {skill: random.uniform(-0.12, 0.12) for skill in SKILLS},
+    }
+
+    skill_series = {
+        skill: _generate_series(archetype, skill, num_assessments, offsets, shared_traits) for skill in SKILLS
+    }
 
     for index, assessed_on in enumerate(assessment_dates):
-        progress = index / max(num_assessments - 1, 1)
-
         scores: dict[str, Decimal] = {}
         confidences: dict[str, Decimal] = {}
 
         for skill in SKILLS:
-            raw = baseline[skill] + slopes[skill] * progress + random.uniform(-0.35, 0.35)
-            clamped = min(9.6, max(3.2, raw))
-            scores[skill] = Decimal(f"{clamped:.2f}")
+            value = skill_series[skill][index]
+            scores[skill] = Decimal(f"{value:.2f}")
 
-            confidence_base = random.uniform(0.62, 0.86)
-            confidence_delta = 0.12 * progress if slopes[skill] >= 0 else -0.08 * progress
-            confidence_value = min(0.97, max(0.55, confidence_base + confidence_delta))
+            confidence_base = 0.58 + (value - 5.0) * 0.045 + random.uniform(-0.06, 0.05)
+            confidence_value = max(0.52, min(0.97, confidence_base))
             confidences[f"confidence_{skill}"] = Decimal(f"{confidence_value:.3f}")
 
         assessment = Assessment(
