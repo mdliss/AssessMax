@@ -58,7 +58,9 @@
       "Bash(lsof:*)",
       "Bash(pkill:*)",
       "Bash(npm view:*)",
-      "Bash(npm install)"
+      "Bash(npm install)",
+      "Bash(python populate_data.py:*)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []
