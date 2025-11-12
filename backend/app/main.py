@@ -26,10 +26,43 @@ app.include_router(ingest_router)
 app.include_router(jobs_router)
 app.include_router(assessments_router)
 
-# Configure CORS from settings
+# Configure CORS with dynamic origin handling
+def get_allowed_origins():
+    """Get list of allowed origins, expanding wildcards"""
+    origins = []
+    for origin in settings.allowed_origins:
+        # Keep non-wildcard origins as-is
+        if "*" not in origin:
+            origins.append(origin)
+        # For Railway wildcard, we'll handle it in origin validation
+    return origins if origins else ["*"]
+
+# Custom CORS origin validator for Railway domains
+def is_allowed_origin(origin: str) -> bool:
+    """Check if origin is allowed, supporting Railway wildcard patterns"""
+    # Check exact matches first
+    if origin in settings.allowed_origins:
+        return True
+
+    # Check wildcard patterns
+    for allowed in settings.allowed_origins:
+        if "*" in allowed:
+            # Convert wildcard pattern to regex-like check
+            # e.g., "https://*.up.railway.app" -> check if ends with ".up.railway.app"
+            pattern = allowed.replace("https://", "").replace("http://", "")
+            if pattern.startswith("*."):
+                domain_suffix = pattern[1:]  # Remove the "*"
+                origin_domain = origin.replace("https://", "").replace("http://", "")
+                if origin_domain.endswith(domain_suffix):
+                    return True
+
+    return False
+
+# Use allow_origin_regex for Railway domains or custom validator
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,
+    allow_origins=get_allowed_origins(),
+    allow_origin_regex=r"https://.*\.up\.railway\.app",  # Allow all Railway apps
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

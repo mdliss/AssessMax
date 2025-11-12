@@ -7,6 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.auth.jwt import verify_cognito_token
 from app.auth.models import AuthError, TokenData, UserRole
+from app.config import settings
 
 # HTTP Bearer token security scheme
 security = HTTPBearer(auto_error=True)
@@ -36,8 +37,22 @@ async def get_current_user(
             return {"user_id": user.sub, "email": user.email}
         ```
     """
+    token = credentials.credentials
+
+    # Bypass auth for development/testing
+    if settings.bypass_auth:
+        # Extract username from mock token format: "mock_token_{username}"
+        if token.startswith("mock_token_"):
+            username = token.replace("mock_token_", "")
+            return TokenData(
+                sub=f"mock-user-{username}",
+                email=f"{username}@example.com",
+                username=username,
+                roles=[UserRole.ADMIN],  # Give admin role for dev
+                cognito_groups=["admin"],
+            )
+
     try:
-        token = credentials.credentials
         user_data = verify_cognito_token(token)
         return user_data
     except AuthError as e:
@@ -121,8 +136,20 @@ async def get_optional_user(
     if not credentials:
         return None
 
+    token = credentials.credentials
+
+    # Bypass auth for development/testing
+    if settings.bypass_auth and token.startswith("mock_token_"):
+        username = token.replace("mock_token_", "")
+        return TokenData(
+            sub=f"mock-user-{username}",
+            email=f"{username}@example.com",
+            username=username,
+            roles=[UserRole.ADMIN],
+            cognito_groups=["admin"],
+        )
+
     try:
-        token = credentials.credentials
         user_data = verify_cognito_token(token)
         return user_data
     except AuthError:
