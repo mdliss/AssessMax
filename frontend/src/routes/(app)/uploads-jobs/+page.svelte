@@ -2,6 +2,13 @@
   import type { PageData } from './$types';
   import { invalidateAll } from '$app/navigation';
   import { clearCache } from '$lib/api/client';
+  import {
+    requestPresignedUpload,
+    uploadToS3,
+    ingestTranscript,
+    ingestArtifact,
+    type FileFormat
+  } from '$lib/api/ingest';
 
   export let data: PageData;
 
@@ -36,6 +43,14 @@
   let statusFilter: StatusFilter = 'all';
   let sortDirection: 'desc' | 'asc' = 'desc';
   let refreshing = false;
+
+  // Upload state
+  let transcriptFileInput: HTMLInputElement;
+  let artifactFileInput: HTMLInputElement;
+  let uploadingTranscript = false;
+  let uploadingArtifact = false;
+  let uploadError: string | null = null;
+  let uploadSuccess: string | null = null;
 
   let jobs = data.jobs ?? [];
   let stats = data.stats;
@@ -145,6 +160,131 @@
     return formatDurationMs(stats.medianDuration);
   }
 
+  function getFileFormat(fileName: string): FileFormat | null {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    const formatMap: Record<string, FileFormat> = {
+      jsonl: 'jsonl',
+      csv: 'csv',
+      txt: 'txt',
+      pdf: 'pdf',
+      docx: 'docx',
+      png: 'png',
+      jpg: 'jpg',
+      jpeg: 'jpeg'
+    };
+    return ext && formatMap[ext] ? formatMap[ext] : null;
+  }
+
+  function getContentType(format: FileFormat): string {
+    const contentTypeMap: Record<FileFormat, string> = {
+      jsonl: 'application/jsonl',
+      csv: 'text/csv',
+      txt: 'text/plain',
+      pdf: 'application/pdf',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      png: 'image/png',
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg'
+    };
+    return contentTypeMap[format];
+  }
+
+  async function handleTranscriptUpload() {
+    const file = transcriptFileInput?.files?.[0];
+    if (!file) return;
+
+    uploadingTranscript = true;
+    uploadError = null;
+    uploadSuccess = null;
+
+    try {
+      const fileFormat = getFileFormat(file.name);
+      if (!fileFormat || !['jsonl', 'csv', 'txt', 'pdf'].includes(fileFormat)) {
+        throw new Error('Invalid file format. Please upload JSONL, CSV, TXT, or PDF files.');
+      }
+
+      // Step 1: Request presigned upload URL
+      const presigned = await requestPresignedUpload({
+        file_name: file.name,
+        file_format: fileFormat,
+        file_size_bytes: file.size,
+        class_id: 'MS-7A', // Default class, could be made selectable
+        date: new Date().toISOString().split('T')[0],
+        content_type: getContentType(fileFormat)
+      });
+
+      // Step 2: Upload file to S3
+      await uploadToS3(presigned.upload_url, file, getContentType(fileFormat));
+
+      // Step 3: Trigger transcript ingestion
+      const result = await ingestTranscript({
+        artifact_id: presigned.artifact_id,
+        metadata: {
+          class_id: 'MS-7A',
+          date: new Date().toISOString().split('T')[0],
+          student_roster: [], // Could be extracted from file or made configurable
+          source: 'manual'
+        }
+      });
+
+      uploadSuccess = `File uploaded successfully! Job ID: ${result.job_id}`;
+      transcriptFileInput.value = '';
+      await refreshJobs();
+    } catch (err) {
+      uploadError = err instanceof Error ? err.message : 'Upload failed';
+    } finally {
+      uploadingTranscript = false;
+    }
+  }
+
+  async function handleArtifactUpload() {
+    const file = artifactFileInput?.files?.[0];
+    if (!file) return;
+
+    uploadingArtifact = true;
+    uploadError = null;
+    uploadSuccess = null;
+
+    try {
+      const fileFormat = getFileFormat(file.name);
+      if (!fileFormat || !['docx', 'png', 'jpg', 'jpeg'].includes(fileFormat)) {
+        throw new Error('Invalid file format. Please upload DOCX, PNG, or JPG files.');
+      }
+
+      // Step 1: Request presigned upload URL
+      const presigned = await requestPresignedUpload({
+        file_name: file.name,
+        file_format: fileFormat,
+        file_size_bytes: file.size,
+        class_id: 'MS-7A', // Default class, could be made selectable
+        date: new Date().toISOString().split('T')[0],
+        content_type: getContentType(fileFormat)
+      });
+
+      // Step 2: Upload file to S3
+      await uploadToS3(presigned.upload_url, file, getContentType(fileFormat));
+
+      // Step 3: Trigger artifact ingestion
+      const result = await ingestArtifact({
+        artifact_id: presigned.artifact_id,
+        metadata: {
+          class_id: 'MS-7A',
+          date: new Date().toISOString().split('T')[0],
+          student_id: 'student-001', // Should be made selectable
+          artifact_type: 'assignment'
+        }
+      });
+
+      uploadSuccess = `File uploaded successfully! Job ID: ${result.job_id}`;
+      artifactFileInput.value = '';
+      await refreshJobs();
+    } catch (err) {
+      uploadError = err instanceof Error ? err.message : 'Upload failed';
+    } finally {
+      uploadingArtifact = false;
+    }
+  }
+
   async function refreshJobs() {
     refreshing = true;
     clearCache('GET:/v1/admin/jobs');
@@ -223,20 +363,66 @@
     </div>
 
     {#if activeTab === 'uploads'}
+      {#if uploadError}
+        <div class="pulse-notification error" role="alert">
+          {uploadError}
+        </div>
+      {/if}
+      {#if uploadSuccess}
+        <div class="pulse-notification success" role="alert">
+          {uploadSuccess}
+        </div>
+      {/if}
       <div class="grid gap-6 lg:grid-cols-2">
         <div class="card-bordered space-y-4">
           <div class="pulse-subheading">Transcript Upload</div>
           <p class="text-muted text-sm">
-            JSONL, CSV, TXT up to 50MB. Metadata mirrors educator upload workflow.
+            JSONL, CSV, TXT, PDF up to 50MB. Metadata mirrors educator upload workflow.
           </p>
-          <button class="pulse-button" type="button">Choose Files</button>
+          <input
+            type="file"
+            bind:this={transcriptFileInput}
+            on:change={handleTranscriptUpload}
+            accept=".jsonl,.csv,.txt,.pdf"
+            class="hidden"
+          />
+          <button
+            class="pulse-button"
+            type="button"
+            on:click={() => transcriptFileInput?.click()}
+            disabled={uploadingTranscript}
+          >
+            {#if uploadingTranscript}
+              Uploading...
+            {:else}
+              Choose Files
+            {/if}
+          </button>
         </div>
         <div class="card-bordered space-y-4">
           <div class="pulse-subheading">Artifact Upload</div>
           <p class="text-muted text-sm">
-            PDF, DOCX, PNG, JPG with student metadata (class, date, description).
+            DOCX, PNG, JPG with student metadata (class, date, description).
           </p>
-          <button class="pulse-button" type="button">Choose Files</button>
+          <input
+            type="file"
+            bind:this={artifactFileInput}
+            on:change={handleArtifactUpload}
+            accept=".docx,.png,.jpg,.jpeg"
+            class="hidden"
+          />
+          <button
+            class="pulse-button"
+            type="button"
+            on:click={() => artifactFileInput?.click()}
+            disabled={uploadingArtifact}
+          >
+            {#if uploadingArtifact}
+              Uploading...
+            {:else}
+              Choose Files
+            {/if}
+          </button>
         </div>
       </div>
       <div class="space-y-3">
