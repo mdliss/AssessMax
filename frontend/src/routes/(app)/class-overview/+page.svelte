@@ -3,29 +3,48 @@
   import { goto } from '$app/navigation';
   import { ROUTES } from '$lib/config';
   import { clearCache } from '$lib/api/client';
+  import { getClassDashboard, type ClassDashboardResponse, type StudentSummary } from '$lib/api/assessments';
+  import RadarChart from '$lib/components/RadarChart.svelte';
 
   let classId = 'MS-7A';
   let loading = false;
   let error: string | null = null;
   let hydrated = false;
-  let students: Array<Record<string, string | number>> = [];
-  let metrics: Record<string, number | string> = {};
+  let dashboardData: ClassDashboardResponse | null = null;
+
+  $: students = dashboardData?.students ?? [];
+  $: metrics = dashboardData?.metrics;
+  $: classAverages = metrics?.class_averages ?? {};
+  $: avgPerStudent = metrics && metrics.student_count > 0
+    ? (metrics.total_assessments / metrics.student_count).toFixed(1)
+    : '--';
+  $: dateRange = metrics?.date_range
+    ? `${new Date(metrics.date_range[0]).toLocaleDateString()} - ${new Date(metrics.date_range[1]).toLocaleDateString()}`
+    : '--';
 
   onMount(() => {
     hydrated = true;
+    loadClassData();
   });
 
-  async function handleRefresh() {
+  async function loadClassData() {
+    if (!classId) return;
+
     loading = true;
     error = null;
     try {
-      clearCache('GET:/v1/classes');
-      // TODO: integrate real data fetch via API client (migration follow-up)
+      dashboardData = await getClassDashboard(classId);
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Unable to refresh class data';
+      error = err instanceof Error ? err.message : 'Unable to load class data';
+      console.error('Failed to load class data:', err);
     } finally {
       loading = false;
     }
+  }
+
+  async function handleRefresh() {
+    clearCache('GET:/v1/classes');
+    await loadClassData();
   }
 
   function handleClearCache() {
@@ -34,6 +53,18 @@
 
   function openStudentDetail(studentId: string) {
     goto(`${ROUTES.studentDetail}?id=${studentId}`);
+  }
+
+  function calculateStudentAverage(student: StudentSummary): string {
+    const scores = Object.values(student.average_scores);
+    if (scores.length === 0) return '--';
+    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+    return avg.toFixed(1);
+  }
+
+  function getLastAssessedDate(student: StudentSummary): string {
+    if (!student.latest_assessment) return '--';
+    return new Date(student.latest_assessment.assessed_on).toLocaleDateString();
   }
 </script>
 
@@ -70,19 +101,19 @@
       <div class="pulse-subheading">Snapshot</div>
       <div class="grid gap-4 md:grid-cols-4">
         <div class="pulse-metric">
-          <div class="pulse-metric-value">{metrics.student_count ?? '--'}</div>
+          <div class="pulse-metric-value">{metrics?.student_count ?? '--'}</div>
           <p class="text-muted">Active Students</p>
         </div>
         <div class="pulse-metric">
-          <div class="pulse-metric-value">{metrics.total_assessments ?? '--'}</div>
+          <div class="pulse-metric-value">{metrics?.total_assessments ?? '--'}</div>
           <p class="text-muted">Assessments Captured</p>
         </div>
         <div class="pulse-metric">
-          <div class="pulse-metric-value">{metrics.avg_per_student ?? '--'}</div>
+          <div class="pulse-metric-value">{avgPerStudent}</div>
           <p class="text-muted">Avg / Student</p>
         </div>
         <div class="pulse-metric">
-          <div class="pulse-metric-value">{metrics.coverage ?? '--'}</div>
+          <div class="pulse-metric-value text-xs">{dateRange}</div>
           <p class="text-muted">Coverage Window</p>
         </div>
       </div>
@@ -92,15 +123,30 @@
   <section class="grid gap-6 lg:grid-cols-[2fr_1fr] drop-in-3">
     <div class="pulse-card">
       <div class="pulse-subheading">Skill Averages</div>
-      <div class="h-[360px] rounded-xl border border-[color:var(--border-color)] bg-[color:var(--background)]/60 flex items-center justify-center text-muted">
-        Radar chart placeholder
-      </div>
+      {#if Object.keys(classAverages).length > 0}
+        <RadarChart data={classAverages} title="Class Averages" />
+      {:else}
+        <div class="h-[360px] rounded-xl border border-[color:var(--border-color)] bg-[color:var(--background)]/60 flex items-center justify-center text-muted">
+          {loading ? 'Loading...' : 'No data available'}
+        </div>
+      {/if}
     </div>
     <div class="pulse-card space-y-3">
       <div class="pulse-subheading">Signal Strength</div>
-      <div class="space-y-2 text-sm text-muted">
-        <p>Scores will render here once data integration is complete.</p>
-      </div>
+      {#if metrics}
+        <div class="space-y-3">
+          {#each Object.entries(classAverages) as [skill, score]}
+            <div class="flex items-center justify-between">
+              <span class="text-sm capitalize">{skill.replace('_', ' ')}</span>
+              <span class="text-sm font-mono" style="color: var(--accent)">{score.toFixed(1)}/100</span>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <div class="space-y-2 text-sm text-muted">
+          <p>Scores will render here once data is loaded.</p>
+        </div>
+      {/if}
     </div>
   </section>
 
@@ -119,22 +165,28 @@
           </tr>
         </thead>
         <tbody>
-          {#if students.length === 0}
+          {#if loading}
             <tr>
               <td class="py-6 text-muted" colspan={6}>
-                Data will populate once API wiring is completed. CSV/PDF exports will live in this section.
+                Loading class data...
+              </td>
+            </tr>
+          {:else if students.length === 0}
+            <tr>
+              <td class="py-6 text-muted" colspan={6}>
+                No students found in class {classId}. Try a different class ID (MS-7A, MS-7B, or MS-8A).
               </td>
             </tr>
           {:else}
             {#each students as student}
               <tr class="border-t border-[color:var(--border-color)]">
-                <td class="py-3 pr-6">{student.name}</td>
-                <td class="py-3 pr-6 font-mono text-sm">{student.student_id}</td>
+                <td class="py-3 pr-6">{student.name ?? 'Unknown'}</td>
+                <td class="py-3 pr-6 font-mono text-xs">{student.student_id}</td>
                 <td class="py-3 pr-6">{student.assessment_count}</td>
-                <td class="py-3 pr-6">{student.last_assessed}</td>
-                <td class="py-3 pr-6">{student.overall_avg}</td>
+                <td class="py-3 pr-6">{getLastAssessedDate(student)}</td>
+                <td class="py-3 pr-6">{calculateStudentAverage(student)}</td>
                 <td class="py-3 pr-6">
-                  <button class="btn-outline text-xs" type="button" on:click={() => openStudentDetail(String(student.student_id))}>
+                  <button class="btn-outline text-xs" type="button" on:click={() => openStudentDetail(student.student_id)}>
                     View Detail
                   </button>
                 </td>

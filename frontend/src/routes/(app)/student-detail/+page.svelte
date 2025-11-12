@@ -1,8 +1,11 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import type { PageData } from './$types';
   import { ROUTES } from '$lib/config';
   import { clearCache } from '$lib/api/client';
+  import { getLatestAssessment, getAssessmentHistory, type AssessmentResponse, type AssessmentHistoryResponse } from '$lib/api/assessments';
+  import RadarChart from '$lib/components/RadarChart.svelte';
 
   export let data: PageData;
 
@@ -16,23 +19,48 @@
   let studentId = data.initialStudentId ?? sampleStudents[0]?.id ?? '';
   let loading = false;
   let error: string | null = null;
+  let assessment: AssessmentResponse | null = null;
+  let history: AssessmentHistoryResponse | null = null;
 
-  async function handleRefresh() {
-    error = null;
+  $: skillScores = assessment?.skills.reduce((acc, skill) => {
+    acc[skill.skill] = skill.score;
+    return acc;
+  }, {} as Record<string, number>) ?? {};
+
+  onMount(() => {
+    if (studentId) {
+      loadStudentData();
+    }
+  });
+
+  async function loadStudentData() {
+    if (!studentId) return;
+
     loading = true;
+    error = null;
     try {
-      clearCache('GET:/v1/students');
-      // TODO: fetch student detail data
+      [assessment, history] = await Promise.all([
+        getLatestAssessment(studentId),
+        getAssessmentHistory(studentId)
+      ]);
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Unable to refresh student data';
+      error = err instanceof Error ? err.message : 'Unable to load student data';
+      console.error('Failed to load student data:', err);
     } finally {
       loading = false;
     }
   }
 
+  async function handleRefresh() {
+    clearCache('GET:/v1/students');
+    clearCache('GET:/v1/assessments');
+    await loadStudentData();
+  }
+
   function selectStudent(id: string) {
     studentId = id;
     goto(`${ROUTES.studentDetail}?id=${id}`, { replaceState: true });
+    loadStudentData();
   }
 </script>
 
@@ -73,37 +101,65 @@
 
   <section class="drop-in-2 space-y-4">
     <div class="pulse-card">
-      <div class="pulse-subheading">Student Hero</div>
-      <div class="grid gap-4 md:grid-cols-4">
-        <div class="pulse-metric">
-          <div class="pulse-metric-value">Student Name</div>
-          <p class="text-muted">Top skill and meta will render here.</p>
+      <div class="pulse-subheading">Student Overview</div>
+      {#if assessment}
+        <div class="grid gap-4 md:grid-cols-4">
+          <div class="pulse-metric">
+            <div class="pulse-metric-value text-sm">Class {assessment.class_id}</div>
+            <p class="text-muted">Student ID: {studentId.slice(0, 8)}...</p>
+          </div>
+          <div class="pulse-metric">
+            <div class="pulse-metric-value">{new Date(assessment.assessed_on).toLocaleDateString()}</div>
+            <p class="text-muted">Last Assessment</p>
+          </div>
+          <div class="pulse-metric">
+            <div class="pulse-metric-value">
+              {(Object.values(skillScores).reduce((a, b) => a + b, 0) / Object.values(skillScores).length).toFixed(1)}
+            </div>
+            <p class="text-muted">Average Score</p>
+          </div>
+          <div class="pulse-metric">
+            <div class="pulse-metric-value text-sm capitalize">
+              {Object.entries(skillScores).sort((a, b) => b[1] - a[1])[0]?.[0].replace('_', ' ')}
+            </div>
+            <p class="text-muted">Top Skill</p>
+          </div>
         </div>
-        <div class="pulse-metric">
-          <div class="pulse-metric-value">Last Assessment</div>
-          <p class="text-muted">ISO date from backend.</p>
-        </div>
-        <div class="pulse-metric">
-          <div class="pulse-metric-value">Avg Score</div>
-          <p class="text-muted">0-100 scale.</p>
-        </div>
-        <div class="pulse-metric">
-          <div class="pulse-metric-value">Top Skill</div>
-          <p class="text-muted">Communication, etc.</p>
-        </div>
-      </div>
+      {:else if loading}
+        <div class="text-center py-6 text-muted">Loading student data...</div>
+      {:else}
+        <div class="text-center py-6 text-muted">No assessment data available. Enter a valid student ID.</div>
+      {/if}
     </div>
 
     <div class="grid gap-6 lg:grid-cols-[2fr_1fr]">
       <div class="pulse-card">
         <div class="pulse-subheading">Current Skill Signature</div>
-        <div class="h-[360px] border border-[color:var(--border-color)] rounded-xl flex items-center justify-center text-muted">
-          Radar chart placeholder
-        </div>
+        {#if Object.keys(skillScores).length > 0}
+          <RadarChart data={skillScores} title="Student Skills" />
+        {:else}
+          <div class="h-[360px] border border-[color:var(--border-color)] rounded-xl flex items-center justify-center text-muted">
+            {loading ? 'Loading...' : 'No skill data available'}
+          </div>
+        {/if}
       </div>
       <div class="pulse-card space-y-3">
-        <div class="pulse-subheading">Skill Cards</div>
-        <p class="text-muted text-sm">Score & confidence cards will render here using reusable components.</p>
+        <div class="pulse-subheading">Skill Scores</div>
+        {#if assessment}
+          <div class="space-y-3">
+            {#each assessment.skills as skill}
+              <div class="space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm capitalize">{skill.skill.replace('_', ' ')}</span>
+                  <span class="text-sm font-mono" style="color: var(--accent)">{skill.score.toFixed(1)}/100</span>
+                </div>
+                <div class="text-xs text-muted">Confidence: {(skill.confidence * 100).toFixed(0)}%</div>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <p class="text-muted text-sm">Scores will appear when data is loaded.</p>
+        {/if}
       </div>
     </div>
   </section>
