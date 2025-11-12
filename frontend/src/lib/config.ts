@@ -1,5 +1,7 @@
 export const API_BASE_URL = import.meta.env.PUBLIC_API_BASE_URL
-  ?? (typeof window !== 'undefined' && window.location.hostname.includes('railway.app')
+  ?? (typeof window !== 'undefined' && (
+      window.location.hostname.includes('railway.app') || window.location.hostname.includes('vercel.app')
+    )
       ? 'https://assessmax-production.up.railway.app'
       : 'http://localhost:8000');
 export const API_TIMEOUT = 30_000;
