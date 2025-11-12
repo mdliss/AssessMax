@@ -56,7 +56,8 @@
       "Bash(aws ecr describe-repositories:*)",
       "Bash(aws cognito-idp:*)",
       "Bash(lsof:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(npm view:*)"
     ],
     "deny": [],
     "ask": []
