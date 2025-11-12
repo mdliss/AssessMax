@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import type { PageData } from './$types';
   import { clearCache } from '$lib/api/client';
   import {
@@ -11,6 +11,8 @@
     type StudentSummary
   } from '$lib/api/assessments';
   import RadarChart from '$lib/components/RadarChart.svelte';
+  import { Chart } from 'chart.js/auto';
+  import type { ChartDataset, ChartOptions } from 'chart.js';
 
   export let data: PageData;
 
@@ -28,6 +30,8 @@
   let rosterError: string | null = null;
   let assessment: AssessmentResponse | null = null;
   let history: AssessmentHistoryResponse | null = null;
+  let trendCanvas: HTMLCanvasElement | null = null;
+  let trendChart: Chart<'line'> | null = null;
 
   let classRosters: Record<string, StudentSummary[]> = {};
   $: availableStudents = classRosters[selectedClass] ?? [];
@@ -38,6 +42,32 @@
     'MS-7B': 'MS-7B · Advisory B',
     'MS-8A': 'MS-8A · Capstone'
   };
+
+  const SKILLS = ['empathy', 'adaptability', 'collaboration', 'communication', 'self_regulation'] as const;
+  type SkillKey = (typeof SKILLS)[number];
+
+  const SKILL_LABELS: Record<SkillKey, string> = {
+    empathy: 'Empathy',
+    adaptability: 'Adaptability',
+    collaboration: 'Collaboration',
+    communication: 'Communication',
+    self_regulation: 'Self Regulation'
+  };
+
+  const SKILL_COLORS: Record<SkillKey, string> = {
+    empathy: '#14b8a6',
+    adaptability: '#3B82F6',
+    collaboration: '#10B981',
+    communication: '#F59E0B',
+    self_regulation: '#A855F7'
+  };
+
+  const SHORT_DATE_FORMAT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+  const LONG_DATE_FORMAT = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
 
   $: skillScores =
     assessment?.skills.reduce((acc, skill) => {
@@ -57,6 +87,160 @@
     if (entries.length === 0) return '';
     return entries[0][0].replace('_', ' ');
   })();
+
+  interface HistoryChartConfig {
+    labels: string[];
+    datasets: ChartDataset<'line', (number | null)[]>[];
+  }
+
+  function buildHistoryChart(historyResponse: AssessmentHistoryResponse | null): HistoryChartConfig | null {
+    if (!historyResponse || historyResponse.assessments.length === 0) {
+      return null;
+    }
+
+    const sorted = [...historyResponse.assessments].sort(
+      (a, b) => new Date(a.assessed_on).getTime() - new Date(b.assessed_on).getTime()
+    );
+
+    const labels = sorted.map((assessment) => assessment.assessed_on);
+    const datasets = SKILLS.map<ChartDataset<'line', (number | null)[]>>((skill) => {
+      const data = sorted.map((assessment) => {
+        const entry = assessment.skills.find((item) => item.skill === skill);
+        if (!entry) return null;
+        return Number(entry.score.toFixed(1));
+      });
+
+      return {
+        label: SKILL_LABELS[skill],
+        data,
+        borderColor: SKILL_COLORS[skill],
+        backgroundColor: SKILL_COLORS[skill],
+        borderWidth: 2,
+        tension: 0.32,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        pointBackgroundColor: SKILL_COLORS[skill],
+        pointBorderColor: '#ffffff',
+        fill: false,
+        spanGaps: true
+      };
+    });
+
+    const hasValues = datasets.some((dataset) =>
+      dataset.data.some((value) => typeof value === 'number' && !Number.isNaN(value))
+    );
+
+    if (!hasValues) {
+      return null;
+    }
+
+    return { labels, datasets };
+  }
+
+  let historyChartConfig: HistoryChartConfig | null = null;
+  $: historyChartConfig = buildHistoryChart(history);
+
+  function destroyTrendChart() {
+    if (trendChart) {
+      trendChart.destroy();
+      trendChart = null;
+    }
+  }
+
+  function createTrendOptions(labels: string[]): ChartOptions<'line'> {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: {
+          grid: {
+            color: 'rgba(148, 163, 184, 0.12)'
+          },
+          ticks: {
+            autoSkip: true,
+            maxTicksLimit: 8,
+            color: 'var(--text-muted)',
+            callback: (_value, index) => {
+              const iso = labels[index as number];
+              return iso ? SHORT_DATE_FORMAT.format(new Date(iso)) : '';
+            }
+          }
+        },
+        y: {
+          suggestedMin: 0,
+          suggestedMax: 100,
+          grid: {
+            color: 'rgba(148, 163, 184, 0.12)'
+          },
+          ticks: {
+            stepSize: 10,
+            color: 'var(--text-muted)',
+            callback: (value) => `${value}`
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            usePointStyle: true,
+            boxWidth: 10,
+            color: 'var(--text-muted)'
+          }
+        },
+        tooltip: {
+          callbacks: {
+            title: (contexts) => {
+              const context = contexts[0];
+              const iso = labels[context.dataIndex];
+              return iso ? LONG_DATE_FORMAT.format(new Date(iso)) : '';
+            },
+            label: (context) => {
+              const datasetLabel = context.dataset.label ?? '';
+              const value = context.parsed.y;
+              if (typeof value !== 'number' || Number.isNaN(value)) {
+                return datasetLabel ? `${datasetLabel}: —` : '—';
+              }
+              return `${datasetLabel}: ${value.toFixed(1)}`;
+            }
+          }
+        }
+      }
+    };
+  }
+
+  async function renderTrendChart(config: HistoryChartConfig) {
+    if (!trendCanvas) return;
+    await tick();
+    if (!trendCanvas) return;
+
+    destroyTrendChart();
+
+    const context = trendCanvas.getContext('2d');
+    if (!context) return;
+
+    trendChart = new Chart(context, {
+      type: 'line',
+      data: {
+        labels: config.labels,
+        datasets: config.datasets
+      },
+      options: createTrendOptions(config.labels)
+    });
+  }
+
+  $: {
+    if (!trendCanvas || !historyChartConfig) {
+      destroyTrendChart();
+    } else {
+      void renderTrendChart(historyChartConfig);
+    }
+  }
+
+  onDestroy(() => {
+    destroyTrendChart();
+  });
 
   onMount(async () => {
     await loadRosters();
@@ -412,8 +596,22 @@
       <button class="btn-outline" type="button">Export CSV</button>
       <button class="btn-outline" type="button">Export PDF</button>
     </div>
-    <div class="h-[320px] rounded-xl border border-[color:var(--border-color)] flex items-center justify-center text-muted">
-      Trend chart placeholder
+    <div class="h-[320px] rounded-xl border border-[color:var(--border-color)] relative overflow-hidden bg-[color:var(--surface-muted)]">
+      {#if historyChartConfig}
+        <canvas bind:this={trendCanvas} class="absolute inset-0 h-full w-full p-4"></canvas>
+      {:else}
+        <div class="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-muted">
+          {#if loading}
+            Loading assessment history…
+          {:else if history && history.assessments.length === 0}
+            No assessment history available.
+          {:else if !history}
+            Select a student to view assessment history.
+          {:else}
+            Unable to display assessment history.
+          {/if}
+        </div>
+      {/if}
     </div>
   </section>
 
