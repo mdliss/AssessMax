@@ -1,0 +1,193 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Lambda Functions for NLP Processing Pipeline
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name
+
+Resources:
+  # IAM Role for Lambda functions
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Environment}-assessmax-lambda-execution
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - Fn::Sub:
+                      - '${BucketArn}/*'
+                      - BucketArn:
+                          Fn::ImportValue: !Sub ${Environment}-RawBucketArn
+                  - Fn::Sub:
+                      - '${BucketArn}/*'
+                      - BucketArn:
+                          Fn::ImportValue: !Sub ${Environment}-NormalizedBucketArn
+                  - Fn::Sub:
+                      - '${BucketArn}/*'
+                      - BucketArn:
+                          Fn::ImportValue: !Sub ${Environment}-OutputsBucketArn
+                  - Fn::ImportValue: !Sub ${Environment}-RawBucketArn
+                  - Fn::ImportValue: !Sub ${Environment}-NormalizedBucketArn
+                  - Fn::ImportValue: !Sub ${Environment}-OutputsBucketArn
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - Fn::ImportValue: !Sub ${Environment}-JobsTableArn
+                  - Fn::ImportValue: !Sub ${Environment}-ArtifactsTableArn
+        - PolicyName: SQSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource:
+                  - Fn::ImportValue: !Sub ${Environment}-ScoringQueueArn
+                  - Fn::ImportValue: !Sub ${Environment}-AggregationQueueArn
+        - PolicyName: KMSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource:
+                  - Fn::ImportValue: !Sub ${Environment}-S3EncryptionKeyArn
+
+  # Normalization Lambda Function
+  NormalizationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-assessmax-normalization
+      Runtime: python3.11
+      Handler: handler.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Code:
+        S3Bucket: !Sub ${Environment}-assessmax-lambdas-${AWS::AccountId}
+        S3Key: normalization.zip
+      Environment:
+        Variables:
+          DYNAMODB_JOBS_TABLE:
+            Fn::ImportValue: !Sub ${Environment}-JobsTableName
+          S3_RAW_BUCKET:
+            Fn::ImportValue: !Sub ${Environment}-RawBucketName
+          S3_NORMALIZED_BUCKET:
+            Fn::ImportValue: !Sub ${Environment}-NormalizedBucketName
+          SCORING_QUEUE_URL:
+            Fn::ImportValue: !Sub ${Environment}-ScoringQueueUrl
+          ENVIRONMENT: !Ref Environment
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: TranscriptNormalization
+
+  # Scoring Lambda Function
+  ScoringFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-assessmax-scoring
+      Runtime: python3.11
+      Handler: handler.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 900
+      MemorySize: 1024
+      Code:
+        S3Bucket: !Sub ${Environment}-assessmax-lambdas-${AWS::AccountId}
+        S3Key: scoring.zip
+      Environment:
+        Variables:
+          DYNAMODB_JOBS_TABLE:
+            Fn::ImportValue: !Sub ${Environment}-JobsTableName
+          S3_NORMALIZED_BUCKET:
+            Fn::ImportValue: !Sub ${Environment}-NormalizedBucketName
+          S3_OUTPUTS_BUCKET:
+            Fn::ImportValue: !Sub ${Environment}-OutputsBucketName
+          AGGREGATION_QUEUE_URL:
+            Fn::ImportValue: !Sub ${Environment}-AggregationQueueUrl
+          ENVIRONMENT: !Ref Environment
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: NLPScoring
+
+  # SQS Event Source Mapping for Scoring Function
+  ScoringQueueEventSource:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn:
+        Fn::ImportValue: !Sub ${Environment}-ScoringQueueArn
+      FunctionName: !Ref ScoringFunction
+      BatchSize: 5
+      MaximumBatchingWindowInSeconds: 10
+      FunctionResponseTypes:
+        - ReportBatchItemFailures
+
+Outputs:
+  LambdaExecutionRoleArn:
+    Description: Lambda Execution Role ARN
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub ${Environment}-LambdaExecutionRoleArn
+
+  NormalizationFunctionArn:
+    Description: Normalization Function ARN
+    Value: !GetAtt NormalizationFunction.Arn
+    Export:
+      Name: !Sub ${Environment}-NormalizationFunctionArn
+
+  NormalizationFunctionName:
+    Description: Normalization Function Name
+    Value: !Ref NormalizationFunction
+    Export:
+      Name: !Sub ${Environment}-NormalizationFunctionName
+
+  ScoringFunctionArn:
+    Description: Scoring Function ARN
+    Value: !GetAtt ScoringFunction.Arn
+    Export:
+      Name: !Sub ${Environment}-ScoringFunctionArn
+
+  ScoringFunctionName:
+    Description: Scoring Function Name
+    Value: !Ref ScoringFunction
+    Export:
+      Name: !Sub ${Environment}-ScoringFunctionName

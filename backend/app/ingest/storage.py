@@ -275,6 +275,7 @@ class DynamoDBClient:
         status: str,
         error: str = "",
         output_keys: list[str] | None = None,
+        execution_arn: str = "",
     ) -> None:
         """
         Update job status.
@@ -284,6 +285,7 @@ class DynamoDBClient:
             status: New status
             error: Error message if failed
             output_keys: List of output S3 keys if succeeded
+            execution_arn: Step Functions execution ARN
         """
         update_expr = "SET #status = :status, updated_at = :updated_at"
         expr_values: dict[str, Any] = {
@@ -299,6 +301,10 @@ class DynamoDBClient:
         if output_keys:
             update_expr += ", output_keys = :output_keys"
             expr_values[":output_keys"] = output_keys
+
+        if execution_arn:
+            update_expr += ", execution_arn = :execution_arn"
+            expr_values[":execution_arn"] = execution_arn
 
         if status in ["succeeded", "failed", "cancelled"]:
             update_expr += ", ended_at = :ended_at"

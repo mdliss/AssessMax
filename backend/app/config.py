@@ -20,8 +20,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # AWS Configuration
-    aws_region: str = Field(default="us-east-1", alias="AWS_REGION")
+    aws_region: str = Field(default="us-east-2", alias="AWS_REGION")
     aws_account_id: str = Field(default="", alias="AWS_ACCOUNT_ID")
+    environment: str = Field(default="dev", alias="ENVIRONMENT")
 
     # AWS Cognito
     cognito_user_pool_id: str = Field(default="", alias="COGNITO_USER_POOL_ID")

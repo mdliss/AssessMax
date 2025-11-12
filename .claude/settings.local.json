@@ -68,7 +68,14 @@
       "Bash(ls:*)",
       "Bash(aws dynamodb create-table:*)",
       "Bash(aws s3api get-bucket-cors:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(aws lambda list-functions:*)",
+      "Bash(aws cloudformation deploy:*)",
+      "Bash(chmod:*)",
+      "Bash(./scripts/deploy-lambdas.sh:*)",
+      "Bash(aws cloudformation describe-stack-events:*)",
+      "Bash(aws cloudformation describe-stacks:*)",
+      "Bash(aws cloudformation validate-template:*)"
     ],
     "deny": [],
     "ask": []

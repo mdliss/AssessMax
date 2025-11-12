@@ -1,0 +1,168 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Step Functions State Machine for Transcript Processing Pipeline
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name
+
+Resources:
+  # IAM Role for Step Functions
+  StepFunctionsExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Environment}-assessmax-stepfunctions-execution
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StepFunctionsExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - Fn::ImportValue: !Sub ${Environment}-NormalizationFunctionArn
+                  - Fn::ImportValue: !Sub ${Environment}-ScoringFunctionArn
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource:
+                  - Fn::ImportValue: !Sub ${Environment}-JobsTableArn
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+
+  # Step Functions State Machine
+  TranscriptProcessingStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub ${Environment}-TranscriptProcessing
+      RoleArn: !GetAtt StepFunctionsExecutionRole.Arn
+      TracingConfiguration:
+        Enabled: true
+      DefinitionString: !Sub |
+        {
+          "Comment": "Transcript Processing Pipeline: Normalize -> Score -> Complete",
+          "StartAt": "NormalizeTranscript",
+          "States": {
+            "NormalizeTranscript": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${NormalizationFunction}",
+                "Payload.$": "$"
+              },
+              "ResultPath": "$.normalizationResult",
+              "ResultSelector": {
+                "statusCode.$": "$.Payload.statusCode",
+                "job_id.$": "$.Payload.job_id",
+                "normalized_key.$": "$.Payload.normalized_key",
+                "line_count.$": "$.Payload.line_count"
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "Next": "HandleError",
+                  "ResultPath": "$.errorInfo"
+                }
+              ],
+              "Next": "CheckNormalizationSuccess"
+            },
+            "CheckNormalizationSuccess": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.normalizationResult.statusCode",
+                  "NumericEquals": 200,
+                  "Next": "WaitForScoring"
+                }
+              ],
+              "Default": "HandleError"
+            },
+            "WaitForScoring": {
+              "Type": "Wait",
+              "Seconds": 2,
+              "Comment": "Brief wait before scoring to ensure SQS message is processed",
+              "Next": "MarkAsProcessing"
+            },
+            "MarkAsProcessing": {
+              "Type": "Pass",
+              "Comment": "Scoring happens asynchronously via SQS",
+              "Result": {
+                "status": "processing",
+                "message": "Transcript normalized and queued for scoring"
+              },
+              "ResultPath": "$.processingStatus",
+              "Next": "Success"
+            },
+            "Success": {
+              "Type": "Succeed"
+            },
+            "HandleError": {
+              "Type": "Fail",
+              "Error": "ProcessingFailed",
+              "Cause": "Transcript processing pipeline failed"
+            }
+          }
+        }
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: TranscriptProcessing
+
+  NormalizationFunction:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /${Environment}/assessmax/normalization-function
+      Type: String
+      Value:
+        Fn::ImportValue: !Sub ${Environment}-NormalizationFunctionName
+      Description: Normalization Lambda function name
+
+Outputs:
+  StateMachineArn:
+    Description: ARN of the Transcript Processing State Machine
+    Value: !Ref TranscriptProcessingStateMachine
+    Export:
+      Name: !Sub ${Environment}-TranscriptProcessingStateMachineArn
+
+  StateMachineName:
+    Description: Name of the Transcript Processing State Machine
+    Value: !GetAtt TranscriptProcessingStateMachine.Name
+    Export:
+      Name: !Sub ${Environment}-TranscriptProcessingStateMachineName
+
+  StepFunctionsExecutionRoleArn:
+    Description: ARN of the Step Functions execution role
+    Value: !GetAtt StepFunctionsExecutionRole.Arn
+    Export:
+      Name: !Sub ${Environment}-StepFunctionsExecutionRoleArn

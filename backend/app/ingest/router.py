@@ -17,6 +17,7 @@ from app.ingest.models import (
 )
 from app.ingest.storage import dynamodb_client, s3_client
 from app.ingest.validators import FileValidator
+from app.ingest.workflow import WorkflowError, trigger_transcript_workflow
 
 router = APIRouter(prefix="/v1/ingest", tags=["Ingestion"])
 
@@ -196,17 +197,49 @@ async def ingest_transcript(
             metadata=job_metadata,
         )
 
-        # TODO: Trigger Step Functions workflow
-        # await trigger_step_function_workflow(job_id)
+        # Trigger Step Functions workflow
+        try:
+            # Determine file format from artifact
+            file_format = artifact.get("content_type", "text/plain")
+            if "csv" in file_format:
+                format_type = "csv"
+            elif "json" in file_format:
+                format_type = "jsonl"
+            else:
+                format_type = "txt"
 
-        return TranscriptIngestResponse(
-            job_id=job_id,
-            artifact_id=request.artifact_id,
-            status="queued",
-            message=f"Transcript ingestion queued successfully. Job ID: {job_id}",
-            class_id=request.metadata.class_id,
-            date=request.metadata.date,
-        )
+            execution_arn = trigger_transcript_workflow(
+                job_id=job_id,
+                artifact_id=request.artifact_id,
+                s3_key=s3_key,
+                class_id=request.metadata.class_id,
+                session_date=request.metadata.date,
+                file_format=format_type,
+                metadata=job_metadata,
+            )
+
+            # Update job with execution ARN
+            dynamodb_client.update_job_status(
+                job_id, "processing", execution_arn=execution_arn
+            )
+
+            return TranscriptIngestResponse(
+                job_id=job_id,
+                artifact_id=request.artifact_id,
+                status="processing",
+                message=f"Transcript processing started. Job ID: {job_id}",
+                class_id=request.metadata.class_id,
+                date=request.metadata.date,
+            )
+
+        except WorkflowError as e:
+            # Update job status to failed
+            dynamodb_client.update_job_status(job_id, "failed", error=str(e))
+
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to start processing workflow: {str(e)}",
+            ) from e
 
     except HTTPException:
         raise

@@ -12,6 +12,7 @@ class JobStatus(str, Enum):
     """Job processing status"""
 
     QUEUED = "queued"
+    PROCESSING = "processing"
     RUNNING = "running"
     NORMALIZING = "normalizing"
     NORMALIZED = "normalized"
