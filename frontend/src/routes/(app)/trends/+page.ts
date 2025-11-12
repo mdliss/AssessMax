@@ -39,8 +39,7 @@ export const load: PageLoad = async ({ url, depends }) => {
         })
       );
       classHistories = historyResults.filter(
-        (history): history is Awaited<ReturnType<typeof getAssessmentHistory>>
-        => history !== null
+        (history): history is Awaited<ReturnType<typeof getAssessmentHistory>> => history !== null
       );
     }
   } catch (err) {
