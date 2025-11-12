@@ -34,7 +34,7 @@
 {#if initialized && authed}
   <div class="pulse-layout">
     <aside class="pulse-sidebar">
-      <div class="sidebar-logo">PULSEMAX</div>
+      <div class="sidebar-logo">ASSESSMAX</div>
       <div class="pulse-divider"></div>
       <div class="pulse-sidebar-section">
         <div class="pulse-sidebar-heading">Navigation</div>
