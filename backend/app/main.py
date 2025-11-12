@@ -21,12 +21,7 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# Include routers
-app.include_router(ingest_router)
-app.include_router(jobs_router)
-app.include_router(assessments_router)
-
-# Configure CORS with dynamic origin handling
+# Configure CORS with dynamic origin handling (MUST be before routers)
 def get_allowed_origins():
     """Get list of allowed origins, expanding wildcards"""
     origins = []
@@ -67,6 +62,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers (MUST be after CORS middleware)
+app.include_router(ingest_router)
+app.include_router(jobs_router)
+app.include_router(assessments_router)
 
 
 class HealthResponse(BaseModel):

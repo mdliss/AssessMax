@@ -63,7 +63,9 @@
       "Bash(npm install:*)",
       "Bash(aws s3 ls:*)",
       "Bash(vercel project:*)",
-      "Bash(vercel --prod --yes)"
+      "Bash(vercel --prod --yes)",
+      "Bash(aws iam create-access-key:*)",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []
