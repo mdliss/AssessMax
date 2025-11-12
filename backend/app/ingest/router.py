@@ -85,6 +85,11 @@ async def request_presigned_upload(
         if content_type == "application/octet-stream":
             content_type = FileValidator.get_content_type(request.file_format)
 
+        # Remove any charset or other parameters that browsers might not send
+        # to ensure signature matches exactly
+        if ';' in content_type:
+            content_type = content_type.split(';')[0].strip()
+
         # Generate presigned URL (1 hour expiration)
         upload_url = s3_client.generate_presigned_upload_url(
             s3_key=s3_key,
