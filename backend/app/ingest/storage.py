@@ -15,7 +15,15 @@ class S3Client:
     """S3 client for file storage and presigned URLs"""
 
     def __init__(self) -> None:
-        self.client = boto3.client("s3", region_name=settings.aws_region)
+        # Use region-specific endpoint to avoid redirects
+        from botocore.client import Config
+
+        self.client = boto3.client(
+            "s3",
+            region_name=settings.aws_region,
+            endpoint_url=f"https://s3.{settings.aws_region}.amazonaws.com",
+            config=Config(signature_version='s3v4', s3={'addressing_style': 'virtual'})
+        )
         self.raw_bucket = settings.s3_bucket_raw
         self.normalized_bucket = settings.s3_bucket_normalized
         self.outputs_bucket = settings.s3_bucket_outputs
@@ -232,7 +240,10 @@ class DynamoDBClient:
         Returns:
             Created job record
         """
-        now = dt.datetime.now(dt.timezone.utc).isoformat()
+        now = dt.datetime.now(dt.timezone.utc)
+        now_iso = now.isoformat()
+        now_timestamp = int(now.timestamp())
+
         job = {
             "job_id": str(job_id),
             "status": "queued",
@@ -242,9 +253,9 @@ class DynamoDBClient:
             "output_keys": [],
             "error": "",
             "metadata": metadata,
-            "started_at": now,
+            "started_at": now_iso,
             "ended_at": "",
-            "created_at": now,
+            "created_at": now_timestamp,  # Use timestamp for GSI
         }
 
         try:
@@ -295,8 +306,9 @@ class DynamoDBClient:
         expr_names = {"#status": "status"}
 
         if error:
-            update_expr += ", error = :error"
+            update_expr += ", #error = :error"
             expr_values[":error"] = error
+            expr_names["#error"] = "error"
 
         if output_keys:
             update_expr += ", output_keys = :output_keys"

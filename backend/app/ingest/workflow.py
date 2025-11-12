@@ -69,14 +69,23 @@ def trigger_transcript_workflow(
         )
 
         # Prepare input for state machine
+        # Ensure all values are JSON serializable
+        safe_metadata = {}
+        if metadata:
+            for key, value in metadata.items():
+                if isinstance(value, (str, int, float, bool, list, dict, type(None))):
+                    safe_metadata[key] = value
+                else:
+                    safe_metadata[key] = str(value)
+
         execution_input = {
             "job_id": str(job_id),
             "artifact_id": str(artifact_id),
             "input_key": s3_key,
             "format": file_format,
             "class_id": class_id,
-            "date": session_date,
-            "metadata": metadata or {},
+            "date": session_date,  # Already converted to ISO string by caller
+            "metadata": safe_metadata,
             "triggered_at": datetime.utcnow().isoformat(),
         }
 

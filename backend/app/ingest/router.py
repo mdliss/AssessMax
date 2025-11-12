@@ -213,7 +213,7 @@ async def ingest_transcript(
                 artifact_id=request.artifact_id,
                 s3_key=s3_key,
                 class_id=request.metadata.class_id,
-                session_date=request.metadata.date,
+                session_date=request.metadata.date.isoformat() if hasattr(request.metadata.date, 'isoformat') else str(request.metadata.date),
                 file_format=format_type,
                 metadata=job_metadata,
             )

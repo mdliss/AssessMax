@@ -31,6 +31,17 @@ def parse_job_record(job: dict) -> JobResponse:
         ended_at = dt.datetime.fromisoformat(job["ended_at"])
         duration_seconds = (ended_at - started_at).total_seconds()
 
+    # Handle created_at which can be either timestamp (int/Decimal) or ISO string
+    from decimal import Decimal
+
+    created_at_raw = job.get("created_at", job["started_at"])
+    if isinstance(created_at_raw, (int, float, Decimal)):
+        # It's a timestamp
+        created_at = dt.datetime.fromtimestamp(float(created_at_raw), tz=dt.timezone.utc)
+    else:
+        # It's an ISO string
+        created_at = dt.datetime.fromisoformat(created_at_raw)
+
     return JobResponse(
         job_id=UUID(job["job_id"]),
         status=JobStatus(job["status"]),
@@ -42,7 +53,7 @@ def parse_job_record(job: dict) -> JobResponse:
         metadata=job.get("metadata", {}),
         started_at=started_at,
         ended_at=ended_at,
-        created_at=dt.datetime.fromisoformat(job.get("created_at", job["started_at"])),
+        created_at=created_at,
         duration_seconds=duration_seconds,
     )
 
