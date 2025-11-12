@@ -54,7 +54,9 @@
       "Bash(python3.11 -m venv:*)",
       "Bash(aws dynamodb list-tables:*)",
       "Bash(aws ecr describe-repositories:*)",
-      "Bash(aws cognito-idp:*)"
+      "Bash(aws cognito-idp:*)",
+      "Bash(lsof:*)",
+      "Bash(pkill:*)"
     ],
     "deny": [],
     "ask": []
