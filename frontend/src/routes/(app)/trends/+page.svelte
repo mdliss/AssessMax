@@ -608,8 +608,20 @@
         plugins: {
           legend: {
             labels: {
-              color: '#b3b3b3'
+              color: '#b3b3b3',
+              font: {
+                size: 12
+              }
             }
+          },
+          tooltip: {
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            titleColor: '#ffffff',
+            bodyColor: '#b3b3b3',
+            borderColor: 'rgba(179, 179, 179, 0.2)',
+            borderWidth: 1,
+            padding: 12,
+            displayColors: true
           }
         },
         interaction: {
@@ -619,20 +631,32 @@
         scales: {
           x: {
             ticks: {
-              color: '#b3b3b3'
+              color: '#b3b3b3',
+              font: {
+                size: 11
+              }
             },
             grid: {
               color: 'rgba(179, 179, 179, 0.08)'
+            },
+            border: {
+              color: 'rgba(179, 179, 179, 0.2)'
             }
           },
           y: {
             min: 0,
             max: 100,
             ticks: {
-              color: '#b3b3b3'
+              color: '#b3b3b3',
+              font: {
+                size: 11
+              }
             },
             grid: {
               color: 'rgba(179, 179, 179, 0.08)'
+            },
+            border: {
+              color: 'rgba(179, 179, 179, 0.2)'
             }
           }
         }
