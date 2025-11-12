@@ -65,7 +65,8 @@ export interface ArtifactIngestResponse {
 export async function requestPresignedUpload(
 	request: PresignedUploadRequest
 ): Promise<PresignedUploadResponse> {
-	return apiRequest<PresignedUploadResponse>('POST:/v1/ingest/presigned-upload', {
+	return apiRequest<PresignedUploadResponse>('/v1/ingest/presigned-upload', {
+		method: 'POST',
 		body: request
 	});
 }
@@ -87,7 +88,8 @@ export async function uploadToS3(url: string, file: File, contentType: string): 
 export async function ingestTranscript(
 	request: TranscriptIngestRequest
 ): Promise<TranscriptIngestResponse> {
-	return apiRequest<TranscriptIngestResponse>('POST:/v1/ingest/transcripts', {
+	return apiRequest<TranscriptIngestResponse>('/v1/ingest/transcripts', {
+		method: 'POST',
 		body: request
 	});
 }
@@ -95,7 +97,8 @@ export async function ingestTranscript(
 export async function ingestArtifact(
 	request: ArtifactIngestRequest
 ): Promise<ArtifactIngestResponse> {
-	return apiRequest<ArtifactIngestResponse>('POST:/v1/ingest/artifacts', {
+	return apiRequest<ArtifactIngestResponse>('/v1/ingest/artifacts', {
+		method: 'POST',
 		body: request
 	});
 }
