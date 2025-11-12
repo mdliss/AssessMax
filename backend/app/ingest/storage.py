@@ -21,7 +21,6 @@ class S3Client:
         self.client = boto3.client(
             "s3",
             region_name=settings.aws_region,
-            endpoint_url=f"https://s3.{settings.aws_region}.amazonaws.com",
             config=Config(signature_version='s3v4', s3={'addressing_style': 'virtual'})
         )
         self.raw_bucket = settings.s3_bucket_raw
@@ -76,6 +75,9 @@ class S3Client:
             ClientError: If S3 operation fails
         """
         try:
+            # Generate presigned URL for PUT with specific content type
+            # The ContentType parameter MUST match what the client sends
+            # HttpMethod must be explicitly set to PUT
             url = self.client.generate_presigned_url(
                 ClientMethod="put_object",
                 Params={
@@ -84,6 +86,7 @@ class S3Client:
                     "ContentType": content_type,
                 },
                 ExpiresIn=expires_in,
+                HttpMethod="PUT",
             )
             return url
         except ClientError as e:

@@ -1,6 +1,7 @@
 """FastAPI router for ingestion endpoints"""
 
 import datetime as dt
+import logging
 from typing import Annotated
 from uuid import uuid4
 
@@ -19,6 +20,7 @@ from app.ingest.storage import dynamodb_client, s3_client
 from app.ingest.validators import FileValidator
 from app.ingest.workflow import WorkflowError, trigger_transcript_workflow
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/ingest", tags=["Ingestion"])
 
 
@@ -154,16 +156,22 @@ async def ingest_transcript(
         HTTPException: 404 if artifact not found, 400 if validation fails
     """
     try:
+        logger.info(f"Starting transcript ingestion for artifact_id={request.artifact_id}, user={user.sub}")
+
         # Get artifact record
+        logger.info(f"Fetching artifact record for {request.artifact_id}")
         artifact = dynamodb_client.get_artifact_record(request.artifact_id)
         if not artifact:
+            logger.error(f"Artifact {request.artifact_id} not found in DynamoDB")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Artifact {request.artifact_id} not found",
             )
+        logger.info(f"Artifact found: {artifact.get('artifact_key')}, status={artifact.get('status')}")
 
         # Verify artifact belongs to the correct class
         if artifact["class_id"] != request.metadata.class_id:
+            logger.error(f"Class ID mismatch: expected {request.metadata.class_id}, got {artifact['class_id']}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Artifact class_id mismatch: expected {request.metadata.class_id}, got {artifact['class_id']}",
@@ -171,11 +179,14 @@ async def ingest_transcript(
 
         # Verify file exists in S3
         s3_key = artifact["artifact_key"]
+        logger.info(f"Checking S3 object existence: {s3_key}")
         if not s3_client.check_object_exists(s3_key):
+            logger.error(f"File not found in S3: {s3_key}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"File not found in S3 at key: {s3_key}. Please upload the file first.",
             )
+        logger.info(f"S3 file verified: {s3_key}")
 
         # Update artifact status to uploaded
         dynamodb_client.update_artifact_status(request.artifact_id, "uploaded")
@@ -189,6 +200,7 @@ async def ingest_transcript(
             "uploader_name": user.display_name,
         }
 
+        logger.info(f"Creating job record: job_id={job_id}, class_id={request.metadata.class_id}")
         dynamodb_client.create_job_record(
             job_id=job_id,
             class_id=request.metadata.class_id,
@@ -196,6 +208,7 @@ async def ingest_transcript(
             input_keys=[s3_key],
             metadata=job_metadata,
         )
+        logger.info(f"Job record created successfully: {job_id}")
 
         # Trigger Step Functions workflow
         try:
@@ -208,6 +221,7 @@ async def ingest_transcript(
             else:
                 format_type = "txt"
 
+            logger.info(f"Triggering Step Functions workflow: job_id={job_id}, format={format_type}")
             execution_arn = trigger_transcript_workflow(
                 job_id=job_id,
                 artifact_id=request.artifact_id,
@@ -217,6 +231,7 @@ async def ingest_transcript(
                 file_format=format_type,
                 metadata=job_metadata,
             )
+            logger.info(f"Step Functions execution started: {execution_arn}")
 
             # Update job with execution ARN
             dynamodb_client.update_job_status(
@@ -234,6 +249,7 @@ async def ingest_transcript(
 
         except WorkflowError as e:
             # Update job status to failed
+            logger.error(f"Step Functions workflow failed: {str(e)}", exc_info=True)
             dynamodb_client.update_job_status(job_id, "failed", error=str(e))
 
             raise HTTPException(
@@ -243,7 +259,8 @@ async def ingest_transcript(
 
     except HTTPException:
         raise
-    except RuntimeError as e:
+    except Exception as e:
+        logger.error(f"Unexpected error in transcript ingestion: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process transcript: {str(e)}",
