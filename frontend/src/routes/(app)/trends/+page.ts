@@ -62,7 +62,7 @@ export const load: PageLoad = async ({ url, depends }) => {
     }
   }
 
-  return {
+  const result = {
     initialMode: mode,
     initialClassId: classId,
     initialStudentId: fallbackStudentId,
@@ -71,4 +71,15 @@ export const load: PageLoad = async ({ url, depends }) => {
     selectedStudentHistory,
     loadErrors: errors,
   };
+
+  console.log('[Trends Load] Data loaded:', {
+    mode,
+    classId,
+    studentsCount: classStudents.length,
+    historiesCount: classHistories.length,
+    hasSelectedHistory: !!selectedStudentHistory,
+    errors
+  });
+
+  return result;
 };

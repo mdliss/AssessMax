@@ -65,7 +65,8 @@
       "Bash(vercel project:*)",
       "Bash(vercel --prod --yes)",
       "Bash(aws iam create-access-key:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(aws dynamodb create-table:*)"
     ],
     "deny": [],
     "ask": []

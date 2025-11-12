@@ -118,6 +118,15 @@
   let metrics: TrendMetrics = trendComputation.metrics;
   let skillSnapshots: SkillSnapshot[] = trendComputation.snapshots;
 
+  // Debug logging
+  console.log('[Trends Debug] Initial data:', {
+    mode,
+    classHistoriesCount: classHistories.length,
+    selectedStudentHistory: selectedStudentHistory ? 'present' : 'null',
+    computationLabelsCount: trendComputation.labels.length,
+    loadErrors: data.loadErrors
+  });
+
   const ACTIVE_MESSAGE = 'Fetching latest trend data…';
 
   function beginLoading() {
@@ -538,7 +547,14 @@
   }
 
   function refreshChart(computation: TrendComputation) {
+    console.log('[Trends Debug] refreshChart called:', {
+      hasCanvas: !!chartCanvas,
+      labelsCount: computation.labels.length,
+      datasetsCount: computation.datasets.length
+    });
+
     if (!chartCanvas) {
+      console.log('[Trends Debug] No canvas element yet');
       if (chartInstance) {
         chartInstance.destroy();
         chartInstance = null;
@@ -547,6 +563,7 @@
     }
 
     if (!computation.labels.length) {
+      console.log('[Trends Debug] No data to display');
       if (chartInstance) {
         chartInstance.destroy();
         chartInstance = null;
@@ -572,6 +589,12 @@
     if (chartInstance) {
       chartInstance.destroy();
     }
+
+    console.log('[Trends Debug] Creating chart with data:', {
+      labels: computation.displayLabels,
+      datasetsLength: datasets.length,
+      firstDataset: datasets[0]?.data.slice(0, 5)
+    });
 
     chartInstance = new Chart(context, {
       type: 'line',
