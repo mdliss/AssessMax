@@ -57,7 +57,8 @@
       "Bash(aws cognito-idp:*)",
       "Bash(lsof:*)",
       "Bash(pkill:*)",
-      "Bash(npm view:*)"
+      "Bash(npm view:*)",
+      "Bash(npm install)"
     ],
     "deny": [],
     "ask": []

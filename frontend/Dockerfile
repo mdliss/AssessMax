@@ -25,8 +25,8 @@ COPY --from=builder /app/build ./build
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
 
-# Expose port
+# Expose port (Railway sets PORT env variable dynamically)
 EXPOSE 3000
 
-# Start the app
+# Start the app (adapter-node respects PORT env var automatically)
 CMD ["node", "build"]
