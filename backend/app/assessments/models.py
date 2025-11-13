@@ -85,6 +85,20 @@ class ClassMetrics(BaseModel):
     )
 
 
+class ClassInfo(BaseModel):
+    """Basic class information"""
+
+    class_id: str = Field(..., description="Class identifier")
+    student_count: int = Field(..., description="Number of students in class")
+
+
+class ClassListResponse(BaseModel):
+    """List of available classes"""
+
+    classes: list[ClassInfo] = Field(..., description="List of classes")
+    total: int = Field(..., description="Total number of classes")
+
+
 class ClassDashboardResponse(BaseModel):
     """Class dashboard with student summaries and metrics"""
 

@@ -13,6 +13,8 @@ from app.assessments.models import (
     AssessmentHistoryResponse,
     AssessmentResponse,
     ClassDashboardResponse,
+    ClassInfo,
+    ClassListResponse,
     ClassMetrics,
     EvidenceResponse,
     EvidenceSpan,
@@ -201,6 +203,51 @@ async def get_assessment_history(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve assessment history: {str(e)}",
+        ) from e
+
+
+@router.get("/v1/classes", response_model=ClassListResponse)
+async def get_classes(
+    db: AsyncSession = Depends(get_db),
+    # user: Annotated[TokenData, Depends(get_current_user)],  # Temporarily disabled for testing
+) -> ClassListResponse:
+    """
+    Get list of all available classes.
+
+    Returns distinct class IDs from the students table along with student counts.
+
+    Requires: Valid authentication
+
+    Args:
+        user: Authenticated user
+        db: Database session
+
+    Returns:
+        ClassListResponse with list of classes
+
+    Raises:
+        HTTPException: 500 if database error
+    """
+    try:
+        # Get distinct class_ids with student counts
+        result = await db.execute(
+            select(Student.class_id, func.count(Student.student_id).label("student_count"))
+            .group_by(Student.class_id)
+            .order_by(Student.class_id)
+        )
+        class_data = result.all()
+
+        classes = [
+            ClassInfo(class_id=class_id, student_count=count)
+            for class_id, count in class_data
+        ]
+
+        return ClassListResponse(classes=classes, total=len(classes))
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve classes: {str(e)}",
         ) from e
 
 

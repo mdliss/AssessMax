@@ -79,7 +79,10 @@
       "Bash(python:*)",
       "Bash(uvicorn:*)",
       "Bash(/tmp/test-upload.sh)",
-      "Bash(.env)"
+      "Bash(.env)",
+      "Bash(/Users/max/AssessMax/venv/bin/python3 -c \"from app.assessments.router import router; print(''Router imported successfully'')\")",
+      "Bash(npm run check:*)",
+      "Bash(../venv/bin/uvicorn:*)"
     ],
     "deny": [],
     "ask": []
