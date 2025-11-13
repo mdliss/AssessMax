@@ -34,8 +34,10 @@ export interface ClassMetrics {
 }
 
 export interface ClassDashboardResponse {
+  class_id: string;
   metrics: ClassMetrics;
   students: StudentSummary[];
+  last_updated: string;
 }
 
 export interface EvidenceSpan {
@@ -57,7 +59,7 @@ export interface EvidenceResponse {
 export interface AssessmentHistoryResponse {
   student_id: string;
   assessments: AssessmentResponse[];
-  evidence_by_assessment: Record<string, EvidenceResponse[]>;
+  total: number;
 }
 
 /**

@@ -7,9 +7,10 @@ export interface SkillScore {
 }
 
 export interface ClassMetrics {
+  class_id: string;
   student_count: number;
   total_assessments: number;
-  date_range: [string, string];
+  date_range: [string, string] | null;
   class_averages: Record<SkillKey, number>;
 }
 
@@ -26,8 +27,10 @@ export interface StudentSummary {
 }
 
 export interface ClassDashboardResponse {
+  class_id: string;
   metrics: ClassMetrics;
   students: StudentSummary[];
+  last_updated: string;
 }
 
 export interface AssessmentSummary {
