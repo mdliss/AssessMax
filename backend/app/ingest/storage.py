@@ -49,7 +49,7 @@ class S3Client:
         Returns:
             S3 object key
         """
-        env = "dev"  # TODO: Make this configurable based on environment
+        env = settings.environment
         date_str = session_date.strftime("%Y-%m-%d")
         safe_filename = file_name.replace(" ", "_")
         return f"raw/{env}/{class_id}/{date_str}/{file_type}/{artifact_id}_{safe_filename}"
