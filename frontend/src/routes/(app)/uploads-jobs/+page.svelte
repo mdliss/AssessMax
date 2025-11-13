@@ -9,6 +9,8 @@
     ingestArtifact,
     type FileFormat
   } from '$lib/api/ingest';
+  import { getClasses, type ClassInfo } from '$lib/api/classes';
+  import { onMount } from 'svelte';
 
   export let data: PageData;
 
@@ -52,6 +54,11 @@
   let uploadError: string | null = null;
   let uploadSuccess: string | null = null;
 
+  // Class selection
+  let availableClasses: ClassInfo[] = [];
+  let selectedClassId: string = '';
+  let loadingClasses = false;
+
   let jobs = data.jobs ?? [];
   let stats = data.stats;
   let error: string | null = data.error ?? null;
@@ -63,6 +70,22 @@
   $: activeJobs = jobs.filter((job) => ACTIVE_STATUSES.has(job.status));
   $: recentUploads = jobs.slice(0, 5);
   $: filteredHistory = filterHistoryJobs();
+
+  onMount(async () => {
+    try {
+      loadingClasses = true;
+      const response = await getClasses();
+      availableClasses = response.classes;
+      // Set default to first class if available
+      if (availableClasses.length > 0) {
+        selectedClassId = availableClasses[0].class_id;
+      }
+    } catch (err) {
+      console.error('Failed to load classes:', err);
+    } finally {
+      loadingClasses = false;
+    }
+  });
 
   const statusLabels: Record<string, string> = {
     completed: 'Completed',
@@ -203,12 +226,17 @@
         throw new Error('Invalid file format. Please upload JSONL, CSV, TXT, or PDF files.');
       }
 
+      // Validate class selection
+      if (!selectedClassId) {
+        throw new Error('Please select a class before uploading');
+      }
+
       // Step 1: Request presigned upload URL
       const presigned = await requestPresignedUpload({
         file_name: file.name,
         file_format: fileFormat,
         file_size_bytes: file.size,
-        class_id: 'MS-7A', // Default class, could be made selectable
+        class_id: selectedClassId,
         date: new Date().toISOString().split('T')[0],
         content_type: getContentType(fileFormat)
       });
@@ -220,7 +248,7 @@
       const result = await ingestTranscript({
         artifact_id: presigned.artifact_id,
         metadata: {
-          class_id: 'MS-7A',
+          class_id: selectedClassId,
           date: new Date().toISOString().split('T')[0],
           student_roster: ['student-001'], // Default roster - could be made configurable
           source: 'manual'
@@ -251,12 +279,17 @@
         throw new Error('Invalid file format. Please upload DOCX, PNG, or JPG files.');
       }
 
+      // Validate class selection
+      if (!selectedClassId) {
+        throw new Error('Please select a class before uploading');
+      }
+
       // Step 1: Request presigned upload URL
       const presigned = await requestPresignedUpload({
         file_name: file.name,
         file_format: fileFormat,
         file_size_bytes: file.size,
-        class_id: 'MS-7A', // Default class, could be made selectable
+        class_id: selectedClassId,
         date: new Date().toISOString().split('T')[0],
         content_type: getContentType(fileFormat)
       });
@@ -268,7 +301,7 @@
       const result = await ingestArtifact({
         artifact_id: presigned.artifact_id,
         metadata: {
-          class_id: 'MS-7A',
+          class_id: selectedClassId,
           date: new Date().toISOString().split('T')[0],
           student_id: 'student-001', // Should be made selectable
           artifact_type: 'assignment'
@@ -373,6 +406,31 @@
           {uploadSuccess}
         </div>
       {/if}
+
+      <!-- Class Selector -->
+      <div class="card-bordered space-y-3 mb-4">
+        <label class="pulse-form-field">
+          <span class="pulse-subheading text-sm">Select Class</span>
+          <select
+            bind:value={selectedClassId}
+            disabled={loadingClasses || availableClasses.length === 0}
+            class="w-full bg-[color:var(--background-color)] border border-[color:var(--border-color)] rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-color)]"
+          >
+            {#if loadingClasses}
+              <option value="">Loading classes...</option>
+            {:else if availableClasses.length === 0}
+              <option value="">No classes available</option>
+            {:else}
+              {#each availableClasses as classInfo}
+                <option value={classInfo.class_id}>
+                  {classInfo.class_id} ({classInfo.student_count} students)
+                </option>
+              {/each}
+            {/if}
+          </select>
+        </label>
+      </div>
+
       <div class="grid gap-6 lg:grid-cols-2">
         <div class="card-bordered space-y-4">
           <div class="pulse-subheading">Transcript Upload</div>

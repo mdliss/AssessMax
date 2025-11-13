@@ -15,6 +15,6 @@
   <div class="pulse-card drop-in-1">
     <div class="pulse-subheading">Routing</div>
     <div class="pulse-metric-value">Redirecting…</div>
-    <p class="text-muted">Preparing the PulseMax workspace.</p>
+    <p class="text-muted">Preparing the AssessMax workspace.</p>
   </div>
 </div>
