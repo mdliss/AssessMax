@@ -21,6 +21,8 @@ JOBS_TABLE = os.environ["DYNAMODB_JOBS_TABLE"]
 S3_RAW_BUCKET = os.environ["S3_RAW_BUCKET"]
 S3_NORMALIZED_BUCKET = os.environ["S3_NORMALIZED_BUCKET"]
 SCORING_QUEUE_URL = os.environ["SCORING_QUEUE_URL"]
+DEFAULT_ANALYSIS_MODE = os.environ.get("DEFAULT_ANALYSIS_MODE", "llm")
+MODEL_VERSION = os.environ.get("LLM_MODEL_VERSION", "llm-1.0.0")
 
 
 def update_job_status(job_id: str, status: str, **kwargs) -> None:
@@ -86,6 +88,7 @@ def normalize_transcript(raw_text: str, format_type: str) -> Dict[str, Any]:
                     "speaker": speaker,
                     "text": text,
                     "timestamp": None,
+                    "student_id": None,
                 })
             else:
                 warnings.append(f"Line {line_num}: Could not parse speaker")
@@ -104,30 +107,46 @@ def normalize_transcript(raw_text: str, format_type: str) -> Dict[str, Any]:
                     "speaker": row["speaker"].strip(),
                     "text": row["text"].strip(),
                     "timestamp": row.get("timestamp"),
+                    "student_id": row.get("student_id"),
                 })
             else:
                 warnings.append(f"Line {line_num}: Missing required fields")
 
     elif format_type == "jsonl":
-        # Parse JSONL format
+        # Parse JSONL format and preserve available metadata (student_id, etc.)
         lines = raw_text.strip().split("\n")
         for line_num, line in enumerate(lines, start=1):
             try:
                 data = json.loads(line)
-                normalized_lines.append({
+                normalized_line = {
                     "line_number": line_num,
                     "speaker": data.get("speaker", "Unknown"),
                     "text": data.get("text", ""),
                     "timestamp": data.get("timestamp"),
-                })
+                    "student_id": data.get("student_id"),
+                }
+
+                # Preserve optional metadata if present
+                if "speaker_role" in data:
+                    normalized_line["speaker_role"] = data["speaker_role"]
+                if "student_external_id" in data:
+                    normalized_line["student_external_id"] = data["student_external_id"]
+
+                normalized_lines.append(normalized_line)
             except json.JSONDecodeError:
                 warnings.append(f"Line {line_num}: Invalid JSON")
+
+    unique_students = sorted(
+        {line["student_id"] for line in normalized_lines if line.get("student_id")}
+    )
 
     return {
         "lines": normalized_lines,
         "metadata": {
             "total_lines": len(normalized_lines),
             "format": format_type,
+            "student_count": len(unique_students),
+            "student_ids": unique_students,
             "validation_warnings": warnings,
         },
         "validation": {
@@ -165,11 +184,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         format_type = event.get("format", "txt")
         class_id = event["class_id"]
         date = event["date"]
+        analysis_mode = event.get("analysis_mode", DEFAULT_ANALYSIS_MODE)
+        model_version = event.get("model_version", MODEL_VERSION)
 
         logger.info(f"Starting normalization for job {job_id}, input: {input_key}")
 
         # Update job status
-        update_job_status(job_id, "normalizing")
+        update_job_status(job_id, "normalizing", analysis_mode=analysis_mode, model_version=model_version)
 
         # Download raw file from S3
         logger.info(f"Downloading {input_key} from {S3_RAW_BUCKET}")
@@ -211,6 +232,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             "date": date,
             "line_count": len(normalized["lines"]),
             "metadata": event.get("metadata", {}),
+            "analysis_mode": analysis_mode,
+            "model_version": model_version,
         }
 
         logger.info(f"Sending job to scoring queue: {SCORING_QUEUE_URL}")

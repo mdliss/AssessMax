@@ -7,6 +7,7 @@ from app.nlp.diarization import DiarizationMapper
 from app.nlp.skill_detection import SkillDetector
 from app.nlp.pipeline import NLPPipeline
 from app.nlp.evidence_extraction import EvidenceExtractor, EvidenceSpan
+from app.nlp.llm_evidence_extractor import LLMEvidenceExtractor, SELEvidence
 
 __all__ = [
     "LanguageDetector",
@@ -17,4 +18,6 @@ __all__ = [
     "NLPPipeline",
     "EvidenceExtractor",
     "EvidenceSpan",
+    "LLMEvidenceExtractor",
+    "SELEvidence",
 ]

@@ -1,0 +1,272 @@
+====================================================================
+LLM-BASED SEL SKILL SCORING - IMPLEMENTATION GUIDE
+====================================================================
+
+OVERVIEW
+--------
+This system uses OpenAI's GPT-4o to analyze classroom conversation
+transcripts and extract evidence of Social-Emotional Learning (SEL) skills.
+
+Unlike keyword-matching approaches, the LLM understands context, nuance,
+and can identify subtle demonstrations of skills like empathy, collaboration,
+adaptability, communication, and self-regulation.
+
+
+SKILLS ASSESSED
+---------------
+1. EMPATHY - Understanding and sharing others' feelings, showing care
+2. ADAPTABILITY - Adjusting to new situations, being flexible
+3. COLLABORATION - Working effectively with others, sharing ideas
+4. COMMUNICATION - Expressing ideas clearly, active listening
+5. SELF-REGULATION - Managing emotions, staying calm, maintaining focus
+
+
+IMPLEMENTATION FILES
+-------------------
+backend/app/nlp/llm_evidence_extractor.py
+  - Core LLM integration with OpenAI
+  - Evidence extraction logic
+  - Score calculation
+
+backend/test_llm_scoring.py
+  - Test script to analyze transcripts
+  - Compare before/after scores
+  - View evidence examples
+
+backend/process_transcripts_with_llm.py
+  - Batch process transcripts
+  - Save assessments to database
+  - Production-ready workflow
+
+
+API KEY CONFIGURATION
+---------------------
+
+✅ OPENAI_API_KEY is already configured in the backend environment
+✅ The key is stored securely in Railway/database configuration
+✅ No additional setup required - the system is ready to use
+
+BACKEND (Railway) - CONFIGURED ✅
+  OPENAI_API_KEY is already set in environment variables
+  The backend code automatically reads it from the environment
+  All LLM processing is ready to work
+
+FRONTEND - NOT NEEDED ❌
+  DO NOT add API key to frontend
+  - All processing happens on backend
+  - Frontend only uploads files and displays results
+  - Never expose API keys in browser code
+
+DATABASE - NOT NEEDED ❌
+  Database only stores results, not processing logic
+
+
+HOW TO USE
+----------
+
+The OpenAI integration is already set up and ready to use!
+
+1. TEST WITH SAMPLE TRANSCRIPTS
+   Run the test script to see how it works:
+
+   cd backend
+   python test_llm_scoring.py
+
+   This will:
+   - Load a sample transcript
+   - Extract evidence for each student
+   - Show scores and reasoning
+   - Compare with previous assessments
+
+
+2. BATCH PROCESS ALL TRANSCRIPTS
+   Process all transcript files and save to database:
+
+   python process_transcripts_with_llm.py
+
+   This will:
+   - Process all .jsonl transcript files
+   - Extract evidence for each student
+   - Calculate SEL skill scores
+   - Save assessments and evidence to database
+
+
+HOW IT WORKS
+------------
+
+1. TRANSCRIPT UPLOAD
+   - User uploads JSONL transcript via frontend
+   - Frontend calls backend /presigned-upload endpoint
+   - File uploads to S3
+
+2. BACKEND PROCESSING
+   - Backend triggers Step Functions workflow
+   - Workflow reads transcript from S3
+   - Calls LLMEvidenceExtractor for each student
+
+3. LLM ANALYSIS (per student)
+   - Send transcript to GPT-4o with student name
+   - GPT-4o identifies 2-5 quotes demonstrating each skill
+   - GPT-4o explains WHY each quote demonstrates the skill
+   - GPT-4o rates each piece of evidence (0.0-1.0)
+
+4. SCORE CALCULATION
+   - Average evidence scores for each skill
+   - Scale to 0-10 range
+   - Calculate confidence based on evidence quality and quantity
+   - Skills with no evidence default to 5.0 (neutral)
+
+5. DATABASE STORAGE
+   - Create Assessment record with scores and confidence levels
+   - Create Evidence records with quotes and rationales
+   - Link to student and class
+
+
+SCORE INTERPRETATION
+--------------------
+0-3   : Below expectations, minimal skill demonstration
+4-6   : Developing, some evidence of skill
+7-8   : Proficient, clear demonstrations
+9-10  : Advanced, strong and consistent demonstrations
+
+Confidence levels:
+0.0-0.5 : Low confidence (limited evidence)
+0.6-0.8 : Moderate confidence (some clear evidence)
+0.8-1.0 : High confidence (strong, clear evidence)
+
+
+EXAMPLE OUTPUT
+--------------
+Student: Emma Johnson
+Utterances: 4
+Words spoken: 66
+
+SEL Skill Assessment:
+Skill                Before     New        Change     Evidence
+──────────────────────────────────────────────────────────────
+Empathy              5.0        8.5        +3.5       3 items (conf: 0.85)
+Adaptability         5.0        6.0        +1.0       2 items (conf: 0.72)
+Collaboration        5.0        9.0        +4.0       4 items (conf: 0.90)
+Communication        5.0        7.5        +2.5       3 items (conf: 0.80)
+Self_regulation      5.0        5.0        +0.0       0 items (conf: 0.30)
+
+Evidence Examples:
+
+  EMPATHY:
+    1. "I understand how you feel. That must be really difficult."
+       → Explicitly acknowledges and validates another's emotional experience
+       → Score: 0.90, Confidence: 0.95
+
+  COLLABORATION:
+    1. "Let's work together on this. I think we can combine our ideas."
+       → Proactively suggests teamwork and values others' contributions
+       → Score: 0.85, Confidence: 0.88
+
+
+COST CONSIDERATIONS
+-------------------
+OpenAI GPT-4o costs (as of 2024):
+- Input: $2.50 per million tokens (~750k words)
+- Output: $10.00 per million tokens (~750k words)
+
+For a typical 10-minute classroom transcript (~2000 words):
+- Input tokens: ~2500 tokens
+- Output tokens: ~1000 tokens
+- Input cost: ~$0.006
+- Output cost: ~$0.010
+- Total: ~$0.016 per transcript
+
+For 30 students across 20 transcripts per semester:
+- ~600 API calls
+- ~$9.60 total cost
+
+This is extremely cost-effective for the quality of analysis provided.
+
+Alternative models:
+- GPT-4o-mini: ~$0.003 per transcript (cheaper, slightly lower quality)
+- GPT-4-turbo: ~$0.020 per transcript (similar quality to GPT-4o)
+
+
+ADVANTAGES OVER KEYWORD MATCHING
+--------------------------------
+1. CONTEXT AWARENESS
+   - Understands sarcasm, questions, and complex meaning
+   - "Can you help me?" shows collaboration, not just keyword "help"
+
+2. NUANCE DETECTION
+   - Identifies subtle empathy like "That must be hard"
+   - Recognizes communication quality, not just quantity
+
+3. EVIDENCE QUALITY
+   - Provides specific quotes with explanations
+   - Teachers can verify and understand the assessment
+
+4. CONTINUOUS IMPROVEMENT
+   - As GPT-4 improves, assessments get better automatically
+   - No need to manually tune keyword lists
+
+
+TRANSCRIPT FORMAT REQUIREMENTS
+-------------------------------
+Transcripts must be JSONL format with:
+{
+  "speaker": "Student Name",
+  "text": "what they said",
+  "timestamp": "HH:MM:SS",
+  "student_id": "uuid-string"
+}
+
+Teacher utterances can have student_id: null
+
+
+VERIFYING RESULTS
+-----------------
+To verify that scores match conversation content:
+
+1. Read the transcript manually
+2. Run the LLM analysis
+3. Compare scores to your own impression
+4. Read the evidence quotes and rationales
+5. Check if high-scoring students actually demonstrated skills
+
+The evidence quotes should make sense and support the scores.
+
+
+TROUBLESHOOTING
+---------------
+Issue: Low/inconsistent scores
+Fix: Ensure transcripts have enough student utterances (3+ per student)
+
+Issue: No evidence found
+Fix: Check that student names match exactly in transcript
+
+Issue: API errors
+Fix: Check rate limits, check OpenAI status (status.openai.com)
+
+
+DEPLOYMENT STATUS
+-----------------
+✅ OpenAI SDK installed
+✅ OPENAI_API_KEY configured in environment
+✅ Backend fully operational
+✅ Ready to process transcripts
+✅ LLM analysis fully integrated
+
+
+USAGE
+-----
+The system is ready to use! Simply:
+1. Upload JSONL transcripts through the frontend
+2. System automatically processes with OpenAI
+3. View SEL skill assessments with evidence
+4. Monitor costs in OpenAI dashboard if needed
+
+
+SUPPORT
+-------
+For questions or issues:
+- Check OpenAI status: status.openai.com
+- Review OpenAI docs: platform.openai.com/docs
+- Check Railway logs for errors
+- View backend application logs for detailed error messages
+====================================================================

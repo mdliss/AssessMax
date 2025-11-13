@@ -87,6 +87,8 @@ def trigger_transcript_workflow(
             "date": session_date,  # Already converted to ISO string by caller
             "metadata": safe_metadata,
             "triggered_at": datetime.utcnow().isoformat(),
+            "analysis_mode": "llm",
+            "model_version": "llm-1.0.0",
         }
 
         logger.info(

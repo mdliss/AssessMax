@@ -8,15 +8,23 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime
+from collections import defaultdict
+from datetime import datetime, date
 from typing import Any, Dict
-from uuid import uuid4
 
 import boto3
 
 # Add parent directory to path to import app modules
 # In production, package these as Lambda layers or include in deployment
 sys.path.insert(0, "/opt/python")  # Lambda layer path
+
+# Local development fallback so tests can import app modules
+LOCAL_APP_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if LOCAL_APP_PATH not in sys.path:
+    sys.path.insert(0, LOCAL_APP_PATH)
+
+from app.nlp.llm_evidence_extractor import LLMEvidenceExtractor
+from lambdas.common.persistence import PersistenceSummary, persist_llm_results
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -34,6 +42,9 @@ S3_OUTPUTS_BUCKET = os.environ["S3_OUTPUTS_BUCKET"]
 RDS_DATABASE_ARN = os.environ.get("RDS_DATABASE_ARN")
 RDS_SECRET_ARN = os.environ.get("RDS_SECRET_ARN")
 AGGREGATION_QUEUE_URL = os.environ.get("AGGREGATION_QUEUE_URL")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
+MODEL_VERSION = os.environ.get("LLM_MODEL_VERSION", "llm-1.0.0")
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
 def update_job_status(job_id: str, status: str, **kwargs) -> None:
@@ -85,91 +96,98 @@ def load_normalized_transcript(s3_key: str) -> list[Dict[str, Any]]:
     return lines
 
 
-def score_transcript_simple(lines: list[Dict[str, Any]]) -> Dict[str, Any]:
+def score_transcript_with_llm(
+    lines: list[Dict[str, Any]],
+    extractor: LLMEvidenceExtractor,
+) -> Dict[str, Any]:
     """
-    Simple scoring implementation without heavy NLP dependencies.
-
-    This is a lightweight implementation for Lambda. In production,
-    you would either:
-    1. Use Lambda layers with NLP libraries
-    2. Use ECS/EKS for heavier compute
-    3. Pre-package models in the Lambda deployment
+    Use the LLM evidence extractor to generate SEL scores and evidence.
 
     Args:
         lines: Normalized transcript lines
+        extractor: Initialized LLMEvidenceExtractor
 
     Returns:
-        Scoring results with skill scores and evidence
+        Dict[str, Any]: Mapping of student_id -> analysis results
     """
-    # Simple keyword-based scoring for MVP
-    skill_keywords = {
-        "empathy": ["understand", "feel", "sorry", "care", "support"],
-        "collaboration": ["together", "team", "cooperate", "work with"],
-        "communication": ["explain", "clarify", "discuss", "share"],
-        "adaptability": ["change", "adapt", "adjust", "flexible"],
-        "self_regulation": ["calm", "control", "focus", "patient"],
-    }
+    if not lines:
+        return {}
 
-    # Group lines by speaker
-    speakers = {}
+    # Build transcript text sent to the model (preserve speaker context)
+    transcript_text = "\n".join(
+        f"{line.get('speaker', 'Unknown')}: {line.get('text', '')}"
+        for line in lines
+        if line.get("text")
+    )
+
+    # Organize utterances per student
+    student_utterances: dict[str, list[Dict[str, Any]]] = defaultdict(list)
+    student_names: dict[str, str] = {}
+    student_external: dict[str, str | None] = {}
+
     for line in lines:
-        speaker = line.get("speaker", "Unknown")
-        if speaker not in speakers:
-            speakers[speaker] = []
-        speakers[speaker].append(line)
-
-    # Score each student
-    results = {}
-    for speaker, utterances in speakers.items():
-        # Skip teacher utterances (simple heuristic)
-        if "teacher" in speaker.lower():
+        student_id_value = line.get("student_id")
+        if not student_id_value:
             continue
 
-        speaker_scores = {}
-        speaker_evidence = {}
+        student_id = str(student_id_value)
 
-        # Combine all utterances for this speaker
-        full_text = " ".join(utt.get("text", "") for utt in utterances).lower()
+        student_utterances[student_id].append(line)
+        student_names.setdefault(student_id, line.get("speaker", "Unknown"))
+        if line.get("student_external_id"):
+            student_external.setdefault(student_id, str(line["student_external_id"]))
 
-        for skill, keywords in skill_keywords.items():
-            # Count keyword matches
-            matches = sum(1 for kw in keywords if kw in full_text)
+    results: Dict[str, Any] = {}
 
-            # Calculate simple score
-            score = min(matches * 0.15 + 0.3, 1.0) if matches > 0 else 0.0
+    for student_id, utterances in student_utterances.items():
+        student_name = student_names.get(student_id, f"Student {student_id}")
 
-            speaker_scores[skill] = {
-                "score": round(score, 3),
-                "confidence": round(min(0.6 + matches * 0.1, 0.9), 3),
-                "demonstration_count": matches,
-            }
+        logger.info(
+            "Extracting SEL evidence for student %s (%s) with %s utterances",
+            student_name,
+            student_id,
+            len(utterances),
+        )
 
-            # Extract evidence (simple - just find lines with keywords)
-            evidence = []
-            for utt in utterances:
-                utt_text = utt.get("text", "").lower()
-                for kw in keywords:
-                    if kw in utt_text:
-                        evidence.append({
-                            "line_number": utt.get("line_number"),
-                            "text": utt.get("text"),
-                            "keyword": kw,
-                        })
-                        break  # One evidence per line
+        evidence_dict, scores_dict = extractor.extract_and_score_student(
+            transcript_text,
+            student_name,
+        )
 
-            speaker_evidence[skill] = evidence[:3]  # Top 3
+        # Convert evidence dataclasses into plain dicts for serialization
+        serialized_evidence: dict[str, list[dict[str, Any]]] = {}
+        for skill, evidence_items in evidence_dict.items():
+            serialized_evidence[skill] = [
+                {
+                    "quote": item.quote,
+                    "rationale": item.rationale,
+                    "score_contribution": item.score_contribution,
+                    "confidence": item.confidence,
+                }
+                for item in evidence_items
+            ]
 
-        results[speaker] = {
-            "scores": speaker_scores,
-            "evidence": speaker_evidence,
+        results[student_id] = {
+            "student_id": student_id,
+            "student_name": student_name,
+            "student_external_id": student_external.get(student_id),
+            "scores": scores_dict,
+            "evidence": serialized_evidence,
             "utterance_count": len(utterances),
+            "words_spoken": sum(
+                len((utt.get("text") or "").split()) for utt in utterances
+            ),
         }
 
     return results
 
 
 def store_assessment_results(
-    job_id: str, class_id: str, date: str, scores: Dict[str, Any]
+    job_id: str,
+    class_id: str,
+    date: str,
+    analysis: Dict[str, Any],
+    metadata: Dict[str, Any] | None = None,
 ) -> list[str]:
     """
     Store assessment results to RDS and S3.
@@ -187,10 +205,20 @@ def store_assessment_results(
 
     # Store detailed results to S3
     results_key = f"scores/{class_id}/{date}/{job_id}.json"
+    payload = {
+        "job_id": job_id,
+        "class_id": class_id,
+        "date": date,
+        "model_version": MODEL_VERSION,
+        "analysis_mode": "llm",
+        "generated_at": datetime.utcnow().isoformat(),
+        "students": analysis,
+        "metadata": metadata or {},
+    }
     s3_client.put_object(
         Bucket=S3_OUTPUTS_BUCKET,
         Key=results_key,
-        Body=json.dumps(scores, indent=2).encode("utf-8"),
+        Body=json.dumps(payload, indent=2).encode("utf-8"),
         ContentType="application/json",
     )
     output_keys.append(results_key)
@@ -229,78 +257,165 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Returns:
         Response dict with scoring results
     """
-    successful = []
-    failed = []
+    successful: list[str] = []
+    failed: list[str] = []
+    extractor: LLMEvidenceExtractor | None = None
 
     # Process each SQS message
     for record in event.get("Records", []):
+        message: Dict[str, Any] = {}
         try:
-            # Parse message body
             message = json.loads(record["body"])
             job_id = message["job_id"]
             normalized_key = message["normalized_key"]
             class_id = message["class_id"]
-            date = message["date"]
+            session_date_str = message["date"]
+            analysis_mode = message.get("analysis_mode", "llm")
+            model_version = message.get("model_version", MODEL_VERSION)
 
-            logger.info(f"Starting scoring for job {job_id}")
+            logger.info(
+                "Starting LLM scoring for job %s (class=%s, date=%s, analysis_mode=%s, model_version=%s)",
+                job_id,
+                class_id,
+                session_date_str,
+                analysis_mode,
+                model_version,
+            )
 
             # Update job status
-            update_job_status(job_id, "scoring")
+            update_job_status(job_id, "scoring", analysis_mode=analysis_mode)
 
             # Load normalized transcript
             transcript_lines = load_normalized_transcript(normalized_key)
-            logger.info(f"Loaded {len(transcript_lines)} transcript lines")
+            line_count = len(transcript_lines)
+            logger.info("Loaded %d transcript lines from %s", line_count, normalized_key)
 
-            # Score transcript
-            logger.info("Running NLP scoring pipeline")
-            scores = score_transcript_simple(transcript_lines)
-            logger.info(f"Generated scores for {len(scores)} students")
+            if line_count == 0:
+                raise ValueError("Transcript contains no lines after normalization")
 
-            # Store results
-            output_keys = store_assessment_results(job_id, class_id, date, scores)
+            # Initialize extractor lazily
+            if extractor is None:
+                logger.info("Initializing LLMEvidenceExtractor (model=%s)", OPENAI_MODEL)
+                extractor = LLMEvidenceExtractor(model=OPENAI_MODEL)
 
-            # Update job status
+            if analysis_mode != "llm":
+                logger.warning(
+                    "Received analysis_mode=%s but only 'llm' is supported; continuing with LLM scoring",
+                    analysis_mode,
+                )
+
+            # Score transcript with LLM
+            scores = score_transcript_with_llm(transcript_lines, extractor)
+            student_count = len(scores)
+            logger.info("Generated LLM scores for %d students", student_count)
+
+            metadata_payload = {
+                "line_count": line_count,
+                "analysis_mode": "llm",
+                "model_version": model_version,
+                "normalized_key": normalized_key,
+                "source_metadata": message.get("metadata", {}),
+            }
+            scoring_metadata = {
+                "student_count": student_count,
+                "analysis_mode": "llm",
+                "model_version": model_version,
+                "completed_at": datetime.utcnow().isoformat(),
+            }
+
+            # Store results to S3
+            output_keys = store_assessment_results(
+                job_id,
+                class_id,
+                session_date_str,
+                scores,
+                metadata=metadata_payload,
+            )
+
+            # Mark scoring phase complete
             update_job_status(
                 job_id,
                 "scored",
                 output_keys=output_keys,
-                scoring_metadata={
-                    "student_count": len(scores),
-                    "completed_at": datetime.utcnow().isoformat(),
-                },
+                scoring_metadata=scoring_metadata,
+            )
+
+            if not DATABASE_URL:
+                raise ValueError("DATABASE_URL environment variable not set")
+
+            try:
+                session_date = date.fromisoformat(session_date_str)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Invalid session date '{session_date_str}': {exc}"
+                ) from exc
+
+            persistence_summary: PersistenceSummary = persist_llm_results(
+                DATABASE_URL,
+                class_id,
+                session_date,
+                model_version,
+                scores,
+            )
+            logger.info(
+                "Persisted assessments for job %s (students=%d, assessments=%d, evidence=%d)",
+                job_id,
+                persistence_summary.students_processed,
+                persistence_summary.assessments_created,
+                persistence_summary.evidence_created,
+            )
+
+            # Finalize job status
+            update_job_status(
+                job_id,
+                "succeeded",
+                output_keys=output_keys,
+                scoring_metadata=scoring_metadata,
+                persistence_metadata=persistence_summary.as_dict(),
+                completed_at=datetime.utcnow().isoformat(),
             )
 
             # Send to aggregation queue (if configured)
-            if AGGREGATION_QUEUE_URL:
+            if AGGREGATION_QUEUE_URL and output_keys:
                 aggregation_message = {
                     "job_id": job_id,
                     "class_id": class_id,
-                    "date": date,
+                    "date": session_date_str,
                     "scores_key": output_keys[0],
-                    "student_count": len(scores),
+                    "student_count": student_count,
+                    "analysis_mode": "llm",
+                    "model_version": model_version,
                 }
                 sqs_client.send_message(
                     QueueUrl=AGGREGATION_QUEUE_URL,
                     MessageBody=json.dumps(aggregation_message),
                 )
-                logger.info(f"Sent job to aggregation queue")
+                logger.info("Sent job %s to aggregation queue", job_id)
 
             successful.append(job_id)
-            logger.info(f"Scoring completed for job {job_id}")
+            logger.info("Completed LLM scoring for job %s", job_id)
 
         except Exception as e:
-            logger.error(f"Scoring failed: {e}", exc_info=True)
-            if "job_id" in message:
-                update_job_status(message["job_id"], "failed", error=str(e))
-                failed.append(message["job_id"])
+            logger.error("Scoring failed: %s", e, exc_info=True)
+            job_id = message.get("job_id")
+            if job_id:
+                update_job_status(job_id, "failed", error=str(e))
+                failed.append(job_id)
+
+    failed_identifiers = []
+    if failed:
+        failed_job_ids = set(failed)
+        for record in event.get("Records", []):
+            try:
+                body = json.loads(record["body"])
+                if body.get("job_id") in failed_job_ids:
+                    failed_identifiers.append({"itemIdentifier": record["messageId"]})
+            except Exception:
+                continue
 
     return {
         "statusCode": 200,
-        "batchItemFailures": [
-            {"itemIdentifier": record["messageId"]}
-            for record in event.get("Records", [])
-            if json.loads(record["body"]).get("job_id") in failed
-        ],
+        "batchItemFailures": failed_identifiers,
         "successful": successful,
         "failed": failed,
     }
