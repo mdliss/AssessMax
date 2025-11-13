@@ -183,6 +183,41 @@
     return formatDurationMs(stats.medianDuration);
   }
 
+  // Pipeline progress tracking
+  const PIPELINE_STAGES = [
+    { status: 'processing', label: 'Uploading', step: 1 },
+    { status: 'queued', label: 'Queued', step: 1 },
+    { status: 'normalizing', label: 'Normalizing', step: 2 },
+    { status: 'normalized', label: 'Normalized', step: 2 },
+    { status: 'scoring', label: 'Scoring', step: 3 },
+    { status: 'scored', label: 'Scored', step: 3 },
+    { status: 'aggregating', label: 'Aggregating', step: 4 },
+    { status: 'succeeded', label: 'Succeeded', step: 5 },
+    { status: 'completed', label: 'Completed', step: 5 },
+  ];
+
+  const STAGE_LABELS = ['Upload', 'Normalize', 'Score', 'Aggregate', 'Complete'];
+
+  function getPipelineProgress(status: string): { currentStep: number; totalSteps: number; percentage: number; stageName: string } {
+    const stage = PIPELINE_STAGES.find(s => s.status === status);
+    const totalSteps = 5;
+
+    if (!stage) {
+      // Failed or unknown status
+      return { currentStep: 0, totalSteps, percentage: 0, stageName: 'Unknown' };
+    }
+
+    if (status === 'failed') {
+      return { currentStep: 0, totalSteps, percentage: 0, stageName: 'Failed' };
+    }
+
+    const currentStep = stage.step;
+    const percentage = (currentStep / totalSteps) * 100;
+    const stageName = STAGE_LABELS[currentStep - 1] || stage.label;
+
+    return { currentStep, totalSteps, percentage, stageName };
+  }
+
   function getFileFormat(fileName: string): FileFormat | null {
     const ext = fileName.split('.').pop()?.toLowerCase();
     const formatMap: Record<string, FileFormat> = {
@@ -505,16 +540,32 @@
                 </tr>
               {:else}
                 {#each recentUploads as job}
+                  {@const progress = getPipelineProgress(job.status)}
                   <tr class="border-b border-[color:var(--border-color)]">
                     <td class="py-3 pr-6 font-mono text-xs">{job.file_name}</td>
                     <td class="py-3 pr-6">
                       {#if job.status}
-                        <span
-                          class="px-2 py-1 rounded-full text-xs"
-                          style={`background-color: ${badgeStyle(job.status).backgroundColor}; color: ${badgeStyle(job.status).color}`}
-                        >
-                          {statusLabel(job.status)}
-                        </span>
+                        {#if ACTIVE_STATUSES.has(job.status)}
+                          <div class="space-y-1.5 min-w-[180px]">
+                            <div class="flex items-center justify-between text-xs">
+                              <span class="font-medium">{progress.stageName}</span>
+                              <span class="text-muted">{progress.currentStep}/{progress.totalSteps}</span>
+                            </div>
+                            <div class="w-full bg-[color:var(--border-color)] rounded-full h-1.5 overflow-hidden">
+                              <div
+                                class="h-full rounded-full transition-all duration-500"
+                                style={`width: ${progress.percentage}%; background-color: ${badgeStyle(job.status).backgroundColor}`}
+                              ></div>
+                            </div>
+                          </div>
+                        {:else}
+                          <span
+                            class="px-2 py-1 rounded-full text-xs"
+                            style={`background-color: ${badgeStyle(job.status).backgroundColor}; color: ${badgeStyle(job.status).color}`}
+                          >
+                            {statusLabel(job.status)}
+                          </span>
+                        {/if}
                       {:else}
                         —
                       {/if}
@@ -560,15 +611,22 @@
                 </tr>
               {:else}
                 {#each activeJobs as job}
+                  {@const progress = getPipelineProgress(job.status)}
                   <tr class="border-b border-[color:var(--border-color)] hover:bg-[color:var(--card-bg)]/40 transition">
                     <td class="py-3 pr-6 font-mono text-xs">{job.file_name}</td>
                     <td class="py-3 pr-6">
-                      <span
-                        class="px-2 py-1 rounded-full text-xs"
-                        style={`background-color: ${badgeStyle(job.status).backgroundColor}; color: ${badgeStyle(job.status).color}`}
-                      >
-                        {statusLabel(job.status)}
-                      </span>
+                      <div class="space-y-1.5 min-w-[200px]">
+                        <div class="flex items-center justify-between text-xs">
+                          <span class="font-medium">{progress.stageName}</span>
+                          <span class="text-muted">{progress.currentStep}/{progress.totalSteps}</span>
+                        </div>
+                        <div class="w-full bg-[color:var(--border-color)] rounded-full h-2 overflow-hidden">
+                          <div
+                            class="h-full rounded-full transition-all duration-500"
+                            style={`width: ${progress.percentage}%; background-color: ${badgeStyle(job.status).backgroundColor}`}
+                          ></div>
+                        </div>
+                      </div>
                     </td>
                     <td class="py-3 pr-6">{formatDateTime(job.started_at)}</td>
                     <td class="py-3 pr-6">{job.class_id}</td>

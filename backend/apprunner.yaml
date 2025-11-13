@@ -5,12 +5,13 @@ build:
     build:
       - echo "Building AssessMax Backend..."
       - pip install --upgrade pip
+      - pip install awscli
       - pip install -e .
       - python -m spacy download en_core_web_sm
       - python -c "import nltk; nltk.download('punkt'); nltk.download('averaged_perceptron_tagger')"
 run:
   runtime-version: 3.11
-  command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+  command: bash start.sh
   network:
     port: 8000
   env:

@@ -20,6 +20,12 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Stage 2: Runtime
 FROM python:3.11-slim
 
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    awscli \
+    zip \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create non-root user
 RUN useradd -m -u 1000 appuser && \
     mkdir -p /app && \
@@ -31,11 +37,15 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy application code
+# Copy application code and assets
 COPY --chown=appuser:appuser ./app ./app
 COPY --chown=appuser:appuser ./alembic ./alembic
 COPY --chown=appuser:appuser ./alembic.ini ./alembic.ini
 COPY --chown=appuser:appuser ./populate_data.py ./populate_data.py
+COPY --chown=appuser:appuser ./lambdas ./lambdas
+COPY --chown=appuser:appuser ./infra ./infra
+COPY --chown=appuser:appuser ./scripts ./scripts
+COPY --chown=appuser:appuser ./start.sh ./start.sh
 
 # Switch to non-root user
 USER appuser
@@ -47,5 +57,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"
 
-# Run migrations, populate data, then start application
-CMD ["sh", "-c", "alembic upgrade head && python populate_data.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# Run startup script (deploys Lambdas, applies migrations, seeds data, starts API)
+CMD ["./start.sh"]

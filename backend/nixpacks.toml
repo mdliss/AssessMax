@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["python311", "postgresql"]
+nixPkgs = ["python311", "postgresql", "awscli2", "zip"]
 
 [phases.install]
 cmds = [
@@ -12,4 +12,4 @@ cmds = [
 cmds = ["python -c \"import nltk; nltk.download('punkt'); nltk.download('averaged_perceptron_tagger')\""]
 
 [start]
-cmd = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+cmd = "bash start.sh"
