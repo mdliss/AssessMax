@@ -9,6 +9,12 @@ ENVIRONMENT="${ENVIRONMENT:-dev}"
 LAMBDA_ENVIRONMENT="${LAMBDA_ENVIRONMENT:-${ENVIRONMENT}}"
 
 run_lambda_deploy() {
+  # Default to false in production to avoid startup timeouts
+  if [[ "${ENVIRONMENT}" == "production" ]] && [[ "${AUTO_DEPLOY,,}" != "true" ]]; then
+    echo "Skipping Lambda deployment in production (set AUTO_DEPLOY_LAMBDAS=true to override)"
+    return 0
+  fi
+
   if [[ "${AUTO_DEPLOY,,}" == "false" ]]; then
     echo "Skipping Lambda deployment: AUTO_DEPLOY_LAMBDAS=false"
     return 0
