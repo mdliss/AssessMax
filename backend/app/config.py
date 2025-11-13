@@ -69,7 +69,11 @@ class Settings(BaseSettings):
     # API Configuration
     api_base_url: str = Field(default="http://localhost:8000", alias="API_BASE_URL")
     allowed_origins: list[str] = Field(
-        default=["http://localhost:3000", "http://localhost:5173"],
+        default=[
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "https://*.up.railway.app",  # Wildcard for all Railway apps
+        ],
         alias="ALLOWED_ORIGINS",
     )
 
