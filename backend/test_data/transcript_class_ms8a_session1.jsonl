@@ -1,0 +1,31 @@
+{"speaker": "Teacher", "text": "Today we're conducting a science experiment on chemical reactions. Safety first - make sure you have your goggles on.", "timestamp": "13:00:00", "student_id": null}
+{"speaker": "Mason Taylor", "text": "Our group is set up and ready. Should we start mixing the solutions?", "timestamp": "13:00:30", "student_id": "f3964874-0379-41e7-9d50-3a52a779da12"}
+{"speaker": "Teacher", "text": "Not yet Mason. First, make sure everyone in your group understands the hypothesis and procedure.", "timestamp": "13:00:45", "student_id": null}
+{"speaker": "Ava Wilson", "text": "I'll read the hypothesis. We think that increasing the concentration will speed up the reaction rate.", "timestamp": "13:01:00", "student_id": "c2193f35-1113-4418-816e-db7dba21c78d"}
+{"speaker": "Marcus Williams", "text": "And we're going to test three different concentrations to see if we're right.", "timestamp": "13:01:30", "student_id": "8f1e4b1d-29ad-47bd-a4c8-6c69663638c7"}
+{"speaker": "Lucas Davis", "text": "I'm in charge of timing each reaction. I'll start the stopwatch as soon as we mix the solutions.", "timestamp": "13:01:45", "student_id": "713dc2d3-e222-4392-ba12-a0c6f3d8bc3d"}
+{"speaker": "Ethan Rodriguez", "text": "And I'll record our observations. Everyone should tell me what they see so we don't miss anything.", "timestamp": "13:02:00", "student_id": "c9a2a272-d4f7-4efe-8b85-0a3a8013f93f"}
+{"speaker": "Mason Taylor", "text": "Okay, let's start with the lowest concentration first. Ava, can you measure out 10 milliliters?", "timestamp": "13:02:30", "student_id": "f3964874-0379-41e7-9d50-3a52a779da12"}
+{"speaker": "Ava Wilson", "text": "Got it. Measuring carefully... okay, exactly 10 milliliters.", "timestamp": "13:02:45", "student_id": "c2193f35-1113-4418-816e-db7dba21c78d"}
+{"speaker": "Lucas Davis", "text": "Ready with the timer. On your mark...", "timestamp": "13:03:00", "student_id": "713dc2d3-e222-4392-ba12-a0c6f3d8bc3d"}
+{"speaker": "Marcus Williams", "text": "Mixing now!", "timestamp": "13:03:15", "student_id": "8f1e4b1d-29ad-47bd-a4c8-6c69663638c7"}
+{"speaker": "Ethan Rodriguez", "text": "I see bubbling starting. The solution is turning cloudy.", "timestamp": "13:03:30", "student_id": "c9a2a272-d4f7-4efe-8b85-0a3a8013f93f"}
+{"speaker": "Lucas Davis", "text": "Reaction complete. Time: 45 seconds.", "timestamp": "13:04:00", "student_id": "713dc2d3-e222-4392-ba12-a0c6f3d8bc3d"}
+{"speaker": "Mason Taylor", "text": "Great! Let's move to the medium concentration. Same process everyone.", "timestamp": "13:04:30", "student_id": "f3964874-0379-41e7-9d50-3a52a779da12"}
+{"speaker": "Ava Wilson", "text": "Measuring 20 milliliters this time... done.", "timestamp": "13:05:00", "student_id": "c2193f35-1113-4418-816e-db7dba21c78d"}
+{"speaker": "Marcus Williams", "text": "Mixing!", "timestamp": "13:05:15", "student_id": "8f1e4b1d-29ad-47bd-a4c8-6c69663638c7"}
+{"speaker": "Ethan Rodriguez", "text": "Wow, this one is reacting much faster. Lots of bubbles immediately.", "timestamp": "13:05:30", "student_id": "c9a2a272-d4f7-4efe-8b85-0a3a8013f93f"}
+{"speaker": "Lucas Davis", "text": "And... done. Only 22 seconds! That's way faster.", "timestamp": "13:05:52", "student_id": "713dc2d3-e222-4392-ba12-a0c6f3d8bc3d"}
+{"speaker": "Marcus Williams", "text": "Our hypothesis is looking good so far. Let's try the highest concentration.", "timestamp": "13:06:15", "student_id": "8f1e4b1d-29ad-47bd-a4c8-6c69663638c7"}
+{"speaker": "Ava Wilson", "text": "30 milliliters measured.", "timestamp": "13:06:30", "student_id": "c2193f35-1113-4418-816e-db7dba21c78d"}
+{"speaker": "Mason Taylor", "text": "Everyone watch closely. If the pattern continues, this should be even faster.", "timestamp": "13:06:45", "student_id": "f3964874-0379-41e7-9d50-3a52a779da12"}
+{"speaker": "Marcus Williams", "text": "Mixing the highest concentration now!", "timestamp": "13:07:00", "student_id": "8f1e4b1d-29ad-47bd-a4c8-6c69663638c7"}
+{"speaker": "Ethan Rodriguez", "text": "Whoa! Instant bubbling. This is definitely the fastest reaction.", "timestamp": "13:07:05", "student_id": "c9a2a272-d4f7-4efe-8b85-0a3a8013f93f"}
+{"speaker": "Lucas Davis", "text": "Complete in just 12 seconds! Our hypothesis was correct.", "timestamp": "13:07:17", "student_id": "713dc2d3-e222-4392-ba12-a0c6f3d8bc3d"}
+{"speaker": "Ava Wilson", "text": "This is so cool! Higher concentration definitely equals faster reaction.", "timestamp": "13:07:45", "student_id": "c2193f35-1113-4418-816e-db7dba21c78d"}
+{"speaker": "Mason Taylor", "text": "Now we need to create our data table and graph. Ethan, can you share your notes?", "timestamp": "13:08:00", "student_id": "f3964874-0379-41e7-9d50-3a52a779da12"}
+{"speaker": "Ethan Rodriguez", "text": "Sure. I have all the times and observations written down clearly.", "timestamp": "13:08:15", "student_id": "c9a2a272-d4f7-4efe-8b85-0a3a8013f93f"}
+{"speaker": "Marcus Williams", "text": "Lucas, your timing was really precise. That's going to make our data more reliable.", "timestamp": "13:08:30", "student_id": "8f1e4b1d-29ad-47bd-a4c8-6c69663638c7"}
+{"speaker": "Lucas Davis", "text": "Thanks! I tried to start and stop at the exact right moments.", "timestamp": "13:08:45", "student_id": "713dc2d3-e222-4392-ba12-a0c6f3d8bc3d"}
+{"speaker": "Ava Wilson", "text": "I think we worked really well together. Everyone did their job and we got great results.", "timestamp": "13:09:00", "student_id": "c2193f35-1113-4418-816e-db7dba21c78d"}
+{"speaker": "Teacher", "text": "Excellent teamwork and scientific process. Your data looks very solid.", "timestamp": "13:09:30", "student_id": null}
