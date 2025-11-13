@@ -84,6 +84,7 @@ class S3Client:
                     "Bucket": self.raw_bucket,
                     "Key": s3_key,
                     "ContentType": content_type,
+                    "ServerSideEncryption": "aws:kms",
                 },
                 ExpiresIn=expires_in,
                 HttpMethod="PUT",

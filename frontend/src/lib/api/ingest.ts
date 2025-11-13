@@ -76,7 +76,8 @@ export async function uploadToS3(url: string, file: File, contentType: string): 
 		method: 'PUT',
 		body: file,
 		headers: {
-			'Content-Type': contentType
+			'Content-Type': contentType,
+			'x-amz-server-side-encryption': 'aws:kms'
 		}
 	});
 
