@@ -5,7 +5,12 @@ APP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PYTHONUNBUFFERED=1
 
 AUTO_DEPLOY="${AUTO_DEPLOY_LAMBDAS:-true}"
-ENVIRONMENT="${ENVIRONMENT:-dev}"
+# Auto-detect Railway environment
+if [[ -n "${RAILWAY_ENVIRONMENT:-}" ]] || [[ -n "${RAILWAY_PROJECT_ID:-}" ]]; then
+  ENVIRONMENT="${ENVIRONMENT:-production}"
+else
+  ENVIRONMENT="${ENVIRONMENT:-dev}"
+fi
 LAMBDA_ENVIRONMENT="${LAMBDA_ENVIRONMENT:-${ENVIRONMENT}}"
 
 run_lambda_deploy() {
